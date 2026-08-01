@@ -1,0 +1,12 @@
+# Keluarga stranger library (source-of-truth §5.3)
+#
+# Bundled, curated licensed-stock or synthetic faces used as Keluarga distractors.
+# NEVER real private individuals photographed without consent.
+#
+# MVP target: 10–15 images, demographically diverse enough to plausibly resemble
+# Indonesian families, candid phone-photo-realistic style.
+#
+# Naming convention (proposed, adjust on Day 1 if it fights the loader):
+#   stranger_<ageband>_<gender>_<nn>.jpg   e.g. stranger_adult_f_03.jpg
+# The age band + gender are load-bearing: Keluarga's similarity dial is demographic
+# closeness of the stranger (§4.4), so the loader must be able to filter by them.

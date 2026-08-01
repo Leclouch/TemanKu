@@ -1,0 +1,11 @@
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  errors:
+    # The engine is the correctness-critical layer; unawaited futures there are bugs.
+    unawaited_futures: warning
+
+linter:
+  rules:
+    prefer_single_quotes: true
+    require_trailing_commas: true

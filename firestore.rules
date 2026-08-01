@@ -1,0 +1,37 @@
+rules_version = '2';
+
+// TemanKu Firestore rules — STUB, but deliberately not permissive.
+//
+// Data model (source-of-truth §11): guardians/{gid}/children/{cid}/...
+// A guardian may read and write only their own subtree. Everything else is denied.
+// Children's data is a sensitive class under UU PDP (§10) — default-deny is the floor,
+// not a nicety.
+//
+// TODO(IT-2): tighten further once concrete subcollections exist — add per-collection
+// field validation (e.g. session summaries are aggregate-only, no raw trial logs
+// server-side) and reject client writes to any derived/telemetry field.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOwner(gid) {
+      return request.auth != null && request.auth.uid == gid;
+    }
+
+    // The guardian document itself.
+    match /guardians/{gid} {
+      allow read, write: if isOwner(gid);
+
+      // The entire subtree beneath it: children, ladder state, session summaries, photos meta.
+      match /{document=**} {
+        allow read, write: if isOwner(gid);
+      }
+    }
+
+    // Anything not matched above is denied. Stated explicitly so the intent is
+    // readable rather than inferred from the absence of a rule.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

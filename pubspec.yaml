@@ -1,0 +1,46 @@
+name: temanku
+description: >-
+  TemanKu — a guardian-mediated AI micro-game teaching Indonesian neurodivergent
+  K-12 students real-world functional classification skills.
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+  flutter: ">=3.22.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State management — ADR-1. Engine/repositories are plain Dart, provider-wrapped.
+  flutter_riverpod: ^2.5.1
+
+  # Backend — source-of-truth §11. Auth + Firestore only; NO Cloud Functions in MVP.
+  firebase_core: ^3.1.0
+  firebase_auth: ^5.1.0
+  cloud_firestore: ^5.0.1
+
+  # Local persistence — §11 "Local encrypted storage (Hive/sqflite) default".
+  # Hive chosen for the key-value-shaped ladder/session state. See README "Package choices".
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+
+  # Routing — see README "Package choices".
+  go_router: ^14.2.0
+
+  # NOTE: no font package (google_fonts) on purpose. Theming is a placeholder for
+  # this pass; final tokens land from Claude Design. See lib/core/theme/.
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    # Bundled Keluarga distractor faces (source-of-truth §5.3). Directory is
+    # committed with a .gitkeep; drop the licensed/synthetic 10–15 image set here.
+    - assets/stranger_library/
