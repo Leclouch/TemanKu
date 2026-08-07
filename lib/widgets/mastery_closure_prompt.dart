@@ -11,8 +11,8 @@
 ///
 /// Not a new screen: a modal on top of whichever mode screen triggered it,
 /// dismissed only by one of the two choices below — [barrierDismissible] is
-/// false and both buttons carry identical [OutlinedButton] weight, so
-/// neither "Lanjutkan" nor "Selesai" reads as the suggested default.
+/// false and both buttons carry identical secondary weight, so neither
+/// "Lanjutkan" nor "Selesai" reads as the suggested default.
 library;
 
 import 'dart:async';
@@ -21,7 +21,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:temanku/core/service_locator.dart';
-import 'package:temanku/core/theme/temanku_theme.dart';
+import 'package:temanku/core/design/design.dart';
 
 /// Shows the prompt and resolves to `true` for "Lanjutkan" (keep playing at
 /// the ceiling tier) or `false` for "Selesai" (end the session now — the
@@ -40,27 +40,26 @@ Future<bool> showMasteryClosurePrompt(BuildContext context, WidgetRef ref) async
     context: context,
     barrierDismissible: false,
     builder: (dialogContext) {
-      final colors = dialogContext.colors;
+      // Colours, radius, and both text styles come from `dialogTheme` in
+      // core/design/theme.dart — nothing is set locally here, which is what
+      // keeps this dialog looking like the rest of the app for free.
       return AlertDialog(
-        backgroundColor: colors.background,
-        title: Text(
-          'Titik berhenti alami',
-          style: dialogContext.type.display.copyWith(color: colors.text, fontSize: 20),
-        ),
-        content: Text(
+        title: const Text('Titik berhenti alami'),
+        content: const Text(
           'Anak sudah menjawab dengan lancar di titik ini. Lanjutkan '
           'berlatih, atau akhiri sesi sekarang — pilihan wali.',
-          style: dialogContext.type.body.copyWith(color: colors.text),
         ),
         actionsAlignment: MainAxisAlignment.spaceEvenly,
+        // Both actions are TkButtonVariant.secondary, so neither reads as
+        // the suggested default — see this function's own doc comment.
         actions: [
-          OutlinedButton(
+          TkButton.secondary(
+            label: 'Lanjutkan',
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Lanjutkan'),
           ),
-          OutlinedButton(
+          TkButton.secondary(
+            label: 'Selesai',
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Selesai'),
           ),
         ],
       );

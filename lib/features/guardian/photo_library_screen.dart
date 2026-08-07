@@ -18,7 +18,7 @@ import 'package:temanku/content/makanan/makanan_module.dart';
 import 'package:temanku/content/module_definition.dart';
 import 'package:temanku/core/constants/domain_enums.dart';
 import 'package:temanku/core/service_locator.dart';
-import 'package:temanku/core/theme/temanku_theme.dart';
+import 'package:temanku/core/design/design.dart';
 import 'package:temanku/data/models/photo.dart';
 import 'package:temanku/widgets/edit_label_dialog.dart';
 import 'package:temanku/widgets/photo_image.dart';
@@ -39,29 +39,26 @@ class PhotoLibraryScreen extends ConsumerWidget {
     final definition = _definitionFor(module);
     final repo = ref.watch(photoRepositoryProvider);
 
-    return Scaffold(
-      appBar: AppBar(title: Text('Foto · ${definition.displayName}')),
-      body: StreamBuilder<List<Photo>>(
+    return TkScreen(
+      title: 'Foto · ${definition.displayName}',
+      child: StreamBuilder<List<Photo>>(
         stream: repo.watchPhotos(childId: childId, module: module),
         builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
+          if (!snapshot.hasData) return const TkLoading(label: 'Memuat foto…');
+
           final photos = snapshot.data!;
           if (photos.isEmpty) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text('Belum ada foto tersimpan.', style: context.type.body),
-              ),
+            return const TkEmptyState(
+              message: 'Belum ada foto tersimpan.',
+              icon: Icons.photo_library_outlined,
             );
           }
 
           final targets = photos.where((p) => p.category == PhotoCategory.target).toList();
           final distractors = photos.where((p) => p.category == PhotoCategory.distractor).toList();
 
-          return ListView(
-            padding: const EdgeInsets.all(16),
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _CategorySection(title: definition.targetCategoryLabel, photos: targets),
               // Keluarga has no distractor photos of its own — its
@@ -70,7 +67,7 @@ class PhotoLibraryScreen extends ConsumerWidget {
               // per-child uploads — so this section simply never renders
               // there rather than showing an always-empty "0 foto" block.
               if (distractors.isNotEmpty) ...[
-                const SizedBox(height: 24),
+                const SizedBox(height: TkSpace.xl),
                 _CategorySection(title: definition.distractorCategoryLabel, photos: distractors),
               ],
             ],
@@ -89,28 +86,24 @@ class _CategorySection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '$title (${photos.length})',
-          style: context.type.display.copyWith(color: colors.text, fontSize: 20),
+    return TkSection(
+      label: title,
+      // The count moves into a badge rather than being spliced into the
+      // heading string — the heading is then the category's own words, and
+      // "how many" stays scannable without re-reading the label.
+      trailing: TkBadge(label: '${photos.length} foto'),
+      child: GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          mainAxisSpacing: TkSpace.sm,
+          crossAxisSpacing: TkSpace.sm,
+          childAspectRatio: 0.85,
         ),
-        const SizedBox(height: 12),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            childAspectRatio: 0.85,
-          ),
-          itemCount: photos.length,
-          itemBuilder: (context, i) => _PhotoTile(photo: photos[i]),
-        ),
-      ],
+        itemCount: photos.length,
+        itemBuilder: (context, i) => _PhotoTile(photo: photos[i]),
+      ),
     );
   }
 }
@@ -160,10 +153,12 @@ class _PhotoTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = context.colors;
+    final unnamed = photo.label == null || photo.label!.isEmpty;
     return Container(
       decoration: BoxDecoration(
-        border: Border.all(color: colors.neutralFeedback),
-        borderRadius: BorderRadius.circular(12),
+        color: colors.surface,
+        border: Border.all(color: colors.border, width: TkStroke.regular),
+        borderRadius: TkRadius.md,
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -175,13 +170,25 @@ class _PhotoTile extends ConsumerWidget {
               children: [
                 PhotoImage(localPath: photo.localPath),
                 Positioned(
-                  top: 4,
-                  right: 4,
+                  top: TkSpace.xxs,
+                  right: TkSpace.xxs,
                   child: PopupMenuButton<_PhotoAction>(
                     tooltip: 'Pilihan foto',
-                    icon: CircleAvatar(
-                      radius: 14,
-                      backgroundColor: colors.background,
+                    // Opaque plate, not a translucent overlay: this control
+                    // sits on top of arbitrary guardian photography, and a
+                    // see-through affordance disappears against a busy one.
+                    icon: Container(
+                      width: 28,
+                      height: 28,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: colors.surface,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: colors.border,
+                          width: TkStroke.hairline,
+                        ),
+                      ),
                       child: Icon(Icons.more_vert, size: 16, color: colors.text),
                     ),
                     onSelected: (action) {
@@ -202,13 +209,22 @@ class _PhotoTile extends ConsumerWidget {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            padding: const EdgeInsets.symmetric(
+              horizontal: TkSpace.xs,
+              vertical: TkSpace.xs,
+            ),
             child: Text(
-              photo.label ?? '(belum diberi nama)',
+              unnamed ? 'Belum diberi nama' : photo.label!,
               textAlign: TextAlign.center,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: context.type.body.copyWith(color: colors.text),
+              // An unnamed photo is a soft nudge, not a fault — muted, and
+              // deliberately not the neutralFeedback token, which would read
+              // as a verdict on the guardian's upload.
+              style: context.type.bodySm.copyWith(
+                color: unnamed ? colors.textMuted : colors.text,
+                fontStyle: unnamed ? FontStyle.italic : FontStyle.normal,
+              ),
             ),
           ),
         ],

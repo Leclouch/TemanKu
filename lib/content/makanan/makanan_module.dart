@@ -1,7 +1,6 @@
-import 'package:flutter/material.dart';
-
 import 'package:temanku/content/module_definition.dart';
 import 'package:temanku/core/constants/domain_enums.dart';
+import 'package:temanku/core/design/design.dart';
 
 /// Makanan — MVP module 1 (source-of-truth §4.2).
 ///
@@ -15,12 +14,14 @@ const makananModule = ModuleDefinition(
   displayName: 'Makanan',
   targetCategoryLabel: 'boleh dimakan',
   distractorCategoryLabel: 'bukan makanan',
+  // Brand palette only (`core/design/tokens.dart` → TkPalette). Colour is
+  // always paired with a shape and never carries meaning alone.
   targetStyle: CategoryStyle(
-    color: Color(0xFF00B351),
+    color: TkPalette.green,
     shape: CategoryShape.circle,
   ),
   distractorStyle: CategoryStyle(
-    color: Color(0xFFF780D4),
+    color: TkPalette.pink,
     shape: CategoryShape.diamond,
   ),
   usesClassifier: true,

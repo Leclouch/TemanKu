@@ -5,7 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:temanku/core/constants/domain_enums.dart';
 import 'package:temanku/core/routing/app_router.dart';
 import 'package:temanku/core/service_locator.dart';
-import 'package:temanku/core/theme/temanku_theme.dart';
+import 'package:temanku/core/design/design.dart';
 import 'package:temanku/data/models/child.dart';
 import 'package:temanku/data/repositories/child_repository.dart';
 import 'package:temanku/data/repositories/in_memory/in_memory_child_repository.dart';

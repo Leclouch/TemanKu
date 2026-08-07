@@ -1,7 +1,6 @@
-import 'package:flutter/material.dart';
-
 import 'package:temanku/content/module_definition.dart';
 import 'package:temanku/core/constants/domain_enums.dart';
+import 'package:temanku/core/design/design.dart';
 
 /// Keluarga — MVP module 2 (source-of-truth §4.2).
 ///
@@ -21,12 +20,14 @@ const keluargaModule = ModuleDefinition(
   displayName: 'Keluarga',
   targetCategoryLabel: 'keluargaku',
   distractorCategoryLabel: 'bukan keluarga',
+  // Brand palette only (`core/design/tokens.dart` → TkPalette). Colour is
+  // always paired with a shape and never carries meaning alone.
   targetStyle: CategoryStyle(
-    color: Color(0xFF2668FD),
+    color: TkPalette.blue,
     shape: CategoryShape.circle,
   ),
   distractorStyle: CategoryStyle(
-    color: Color(0xFFC9C2AE),
+    color: TkPalette.paleYellow,
     shape: CategoryShape.square,
   ),
   // Permanently false: guardian supplies name/relationship directly — the only

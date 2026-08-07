@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'package:temanku/core/theme/temanku_theme.dart';
+import 'package:temanku/core/design/design.dart';
 
 /// The task card — **shared component, jointly owned.**
 ///
@@ -29,16 +29,16 @@ class TaskCard extends StatelessWidget {
       aspectRatio: 1,
       child: Container(
         decoration: BoxDecoration(
-          color: colors.background,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: colors.neutralFeedback, width: 2),
+          color: colors.surface,
+          borderRadius: TkRadius.md,
+          border: Border.all(color: colors.border, width: TkStroke.regular),
         ),
         alignment: Alignment.center,
         child: child ??
             Text(
               label ?? 'task',
               textAlign: TextAlign.center,
-              style: context.type.body.copyWith(color: colors.text),
+              style: context.type.body.copyWith(color: colors.textMuted),
             ),
       ),
     );

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'package:temanku/app.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -11,9 +12,19 @@ import 'firebase_options.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  // On web the generated `DefaultFirebaseOptions` may be missing for
+  // local development; firebase_core_web requires non-null options when
+  // creating the default app. Skip explicit initialization on web so the
+  // app can run without Firebase configuration during local/dev runs.
+  if (!kIsWeb) {
+    if (DefaultFirebaseOptions.currentPlatform != null) {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+    } else {
+      await Firebase.initializeApp();
+    }
+  }
 
   // §11: local encrypted storage — LocalPhotoRepository (and the ladder/session
   // Hive boxes as they land) all assume this has run before any box opens.

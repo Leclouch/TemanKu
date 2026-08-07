@@ -17,7 +17,14 @@ class NoHintService implements PronunciationHintService {
   Future<PronunciationHintResult?> scorePronunciation({
     required Uint8List audioClip,
     required String targetWord,
-    int difficulty = defaultPronunciationHintDifficulty,
+    required int tolerance,
   }) async =>
       null;
+
+  /// Always false — which makes speak mode skip recording a clip for scoring
+  /// entirely when the feature is off, rather than capturing audio and then
+  /// discarding it. The strongest form of "no audio leaves the device" is not
+  /// capturing it in the first place (§10).
+  @override
+  Future<bool> canScore(String word) async => false;
 }
