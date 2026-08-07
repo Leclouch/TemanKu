@@ -1,9 +1,9 @@
 /// [SoundService] implementation on `package:audioplayers`.
 ///
-/// ## Constraints this class (and whatever real audio eventually lands in
-/// `assets/sounds/`) must satisfy — SimpleTEA's "encouraging not repressive"
-/// principle, see `sound_service.dart`'s own doc comment for the full frame:
-///   - `correct.mp3` and `try_again.mp3` must be **tonally equivalent** —
+/// ## Constraints the assets in `assets/sounds/` must satisfy —
+/// SimpleTEA's "encouraging not repressive" principle, see
+/// `sound_service.dart`'s own doc comment for the full frame:
+///   - `correct.wav` and `try_again.wav` must be **tonally equivalent** —
 ///     same instrument family, same warmth, similar (short) duration.
 ///     Distinct enough to be informative, never a fanfare paired with a
 ///     buzzer.
@@ -12,10 +12,10 @@
 ///   - Every sound is short (well under 1 second) with a soft attack/decay —
 ///     nothing that starts with a sudden loud onset.
 ///
-/// `assets/sounds/*.mp3` today are placeholder **silent stub files** — see
-/// `assets/sounds/.gitkeep` for the drop-in instructions. This class just
-/// plays whatever asset is actually there; no code change is needed once
-/// real audio replaces the stubs.
+/// `assets/sounds/*.wav` — plain PCM WAV, not MP3 — see
+/// `assets/sounds/.gitkeep` for the file-by-file status. This class just
+/// plays whatever asset is actually there; no code change is needed as the
+/// audio content itself changes, only if the file *format* ever does.
 library;
 
 import 'dart:async';
@@ -67,19 +67,19 @@ class AppSoundService implements SoundService {
   void setVolume(double volume) => _volume = volume.clamp(0.0, 1.0);
 
   @override
-  Future<void> playCorrect() => _play(_correctPlayer, 'sounds/correct.mp3');
+  Future<void> playCorrect() => _play(_correctPlayer, 'sounds/correct.wav');
 
   @override
-  Future<void> playTryAgain() => _play(_tryAgainPlayer, 'sounds/try_again.mp3');
+  Future<void> playTryAgain() => _play(_tryAgainPlayer, 'sounds/try_again.wav');
 
   @override
   Future<void> playSessionComplete() =>
-      _play(_sessionCompletePlayer, 'sounds/session_complete.mp3');
+      _play(_sessionCompletePlayer, 'sounds/session_complete.wav');
 
-  /// Fails silently on any error — a missing/corrupt asset (the placeholder
-  /// stubs today) or a platform audio failure must never crash or block the
-  /// trial that triggered it (task constraint). [assetPath] is relative to
-  /// `assets/`, per `AssetSource`'s own contract.
+  /// Fails silently on any error — a missing/corrupt/unplayable asset or a
+  /// platform audio failure must never crash or block the trial that
+  /// triggered it (task constraint). [assetPath] is relative to `assets/`,
+  /// per `AssetSource`'s own contract.
   Future<void> _play(AudioPlayer player, String assetPath) async {
     if (_muted) return;
     try {

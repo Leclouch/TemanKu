@@ -1,23 +1,22 @@
 # TemanKu sound effects (audio/sound_service.dart, audio/app_sound_service.dart)
 #
-# correct.mp3, try_again.mp3, session_complete.mp3 in this folder are
-# PLACEHOLDER SILENT STUB FILES (0 bytes) — not synthesized audio, just empty
-# files so the app compiles, bundles, and runs cleanly with sound wired up but
-# nothing audible yet. AppSoundService.play* fails silently on them, same as
-# it would on any missing/corrupt asset.
+# correct.wav, try_again.wav, session_complete.wav — plain PCM WAV, not MP3.
+# AppSoundService.play* fails silently on any of these being missing,
+# corrupt, or unplayable, same as it would for any other asset error.
 #
-# TODO(IT-2): replace each with real audio before demo. Constraints (§ sound
-# design, SimpleTEA's "encouraging not repressive" principle — see
-# sound_service.dart's doc comment for the full rationale):
-#   - correct.mp3 and try_again.mp3 must be TONALLY EQUIVALENT: same
+# Design constraints these files must satisfy (§ sound design, SimpleTEA's
+# "encouraging not repressive" principle — see sound_service.dart's doc
+# comment for the full rationale):
+#   - correct.wav and try_again.wav must be TONALLY EQUIVALENT: same
 #     instrument family, same warmth, similar (short) duration. Distinct
 #     enough to be informative (different pitch/pattern), but neither may
 #     sound like a punishment or an alarm — think "two friendly chimes," not
 #     "success fanfare vs. error buzzer".
-#   - session_complete.mp3: calm, no fanfare, no "you win" register — same
+#   - session_complete.wav: calm, no fanfare, no "you win" register — same
 #     no-celebration tone as widgets/mastery_closure_prompt.dart's copy.
 #   - Every file under ~1 second, soft attack/decay — no sudden loud onset.
 #   - No looping — these are one-shot chimes, never background music.
 #
-# No code change needed once real files land here; the loader just plays
-# whatever's actually in this folder.
+# No code change needed as the audio content changes — the loader just plays
+# whatever's actually in this folder. A code change is only needed if the
+# file *format* changes (AppSoundService's asset paths are format-specific).
