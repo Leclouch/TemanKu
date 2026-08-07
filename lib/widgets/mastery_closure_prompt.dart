@@ -15,8 +15,12 @@
 /// neither "Lanjutkan" nor "Selesai" reads as the suggested default.
 library;
 
-import 'package:flutter/material.dart';
+import 'dart:async';
 
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'package:temanku/core/service_locator.dart';
 import 'package:temanku/core/theme/temanku_theme.dart';
 
 /// Shows the prompt and resolves to `true` for "Lanjutkan" (keep playing at
@@ -25,7 +29,13 @@ import 'package:temanku/core/theme/temanku_theme.dart';
 /// dismissed some other way than the two buttons (e.g. the OS back gesture)
 /// resolves to `true`: an ambiguous dismissal must never silently end the
 /// session on the guardian's behalf.
-Future<bool> showMasteryClosurePrompt(BuildContext context) async {
+///
+/// Plays [SoundService.playSessionComplete] once, right as the prompt opens
+/// — wired here rather than in each of the three mode screens so the sound
+/// stays tied to the prompt itself, regardless of which button the guardian
+/// ends up choosing.
+Future<bool> showMasteryClosurePrompt(BuildContext context, WidgetRef ref) async {
+  unawaited(ref.read(soundServiceProvider).playSessionComplete());
   final result = await showDialog<bool>(
     context: context,
     barrierDismissible: false,

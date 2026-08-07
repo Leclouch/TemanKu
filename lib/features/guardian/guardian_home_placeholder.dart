@@ -4,29 +4,36 @@ import 'package:go_router/go_router.dart';
 
 import 'package:temanku/content/keluarga/keluarga_module.dart';
 import 'package:temanku/content/makanan/makanan_module.dart';
+import 'package:temanku/content/module_definition.dart';
 import 'package:temanku/core/constants/domain_enums.dart';
 import 'package:temanku/core/routing/app_router.dart';
 import 'package:temanku/core/service_locator.dart';
 import 'package:temanku/core/theme/temanku_theme.dart';
+import 'package:temanku/data/models/child.dart';
 import 'package:temanku/data/models/session.dart';
 import 'package:temanku/features/guardian/session_recap.dart';
 
-/// Guardian home — **IT-2. Placeholder: shows where each surface will live.**
+/// Guardian home — **IT-2.**
 ///
 /// Reads tokens from the same `core/theme/` source as the child screen, at the
 /// guardian temperature — that shared source is the thing this file is proving.
 ///
-/// The four surfaces stubbed below, with their source-of-truth constraints:
+/// The five surfaces below, with their source-of-truth constraints:
 ///   - **Intake** (§8) — per-child, one behavioural question per mode, selecting
 ///     available *modes*, never predicting levels. Never a report, never a score.
 ///   - **Upload flow** (§5) — quality gate, variety coaching toward five varied
 ///     photos as a **soft nudge, never a hard gate**, label prompt on low
 ///     classifier confidence. Home of the "photo becomes the task" moment (§12).
-///   - **Post-session summary** (§8) — descriptive sentences, **notebook not
-///     dashboard**. Duration, mode, dial-specific observations. No percentages,
-///     no accuracy stats.
-///   - **Milestone timeline** (§8) — categorical mastered/emerging over time, not
-///     a performance graph.
+///   - **Post-session summary** ([_SessionRecapCard], §8) — the latest session's
+///     [buildSessionRecap] sentence: descriptive, **notebook not dashboard**.
+///     Duration, mode, dial-specific observations. No percentages, no accuracy
+///     stats.
+///   - **Milestone timeline** ([_MilestoneTimeline], §8) — one categorical
+///     mastered/emerging line per active (module, mode), read straight off the
+///     current [LadderPosition] and the module's own [ModuleDefinition.similarityTierCopy].
+///     Not a performance graph, and not a history of past positions — there is
+///     nowhere in this codebase that persists a position's *prior* values, only
+///     its current one, so "over time" here means "as of now," honestly.
 class GuardianHomePlaceholder extends ConsumerWidget {
   const GuardianHomePlaceholder({super.key, required this.childId});
 
@@ -44,15 +51,8 @@ class GuardianHomePlaceholder extends ConsumerWidget {
           _IntakeEntryPoint(childId: childId),
           _SettingsEntryPoint(childId: childId),
           _UploadEntryPoint(childId: childId),
-          const _Stub(
-            title: 'Ringkasan sesi',
-            body: 'Kalimat deskriptif, bukan angka. TODO(IT-2) Day 4.',
-          ),
-          const _Stub(
-            title: 'Perjalanan',
-            body: 'Milestone timeline — kategori yang sudah dikuasai, '
-                'bukan grafik nilai. TODO(IT-2) Day 4.',
-          ),
+          _SessionRecapCard(childId: childId),
+          _MilestoneTimeline(childId: childId),
           const SizedBox(height: 8),
           Text('Riwayat (dari repository)', style: context.type.display),
           const SizedBox(height: 8),
@@ -254,11 +254,19 @@ class _UploadEntryPoint extends StatelessWidget {
   }
 }
 
-class _Stub extends StatelessWidget {
-  const _Stub({required this.title, required this.body});
+ModuleDefinition _definitionFor(ModuleId module) => switch (module) {
+      ModuleId.makanan => makananModule,
+      ModuleId.keluarga => keluargaModule,
+    };
+
+/// Shared card chrome — same border/shape every guardian card on this screen
+/// uses, factored out once both real (non-stub) cards needed a FutureBuilder
+/// wrapped in it.
+class _GuardianCard extends StatelessWidget {
+  const _GuardianCard({required this.title, required this.child});
 
   final String title;
-  final String body;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
@@ -277,10 +285,136 @@ class _Stub extends StatelessWidget {
           children: [
             Text(title, style: context.type.display.copyWith(color: colors.text)),
             const SizedBox(height: 6),
-            Text(body, style: context.type.body.copyWith(color: colors.text)),
+            child,
           ],
         ),
       ),
     );
   }
+}
+
+/// The "Ringkasan sesi" card (§8 post-session summary) — the most recent
+/// session's [buildSessionRecap] sentence. Descriptive only, same as every
+/// row in the "Riwayat" list below; this card just surfaces the latest one
+/// without the guardian having to scroll to find it.
+class _SessionRecapCard extends ConsumerWidget {
+  const _SessionRecapCard({required this.childId});
+
+  final String childId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = context.colors;
+    final sessions = ref.watch(sessionRepositoryProvider);
+    return _GuardianCard(
+      title: 'Ringkasan sesi',
+      child: FutureBuilder<List<SessionSummary>>(
+        future: sessions.getSessionHistory(childId, limit: 1),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: LinearProgressIndicator(),
+            );
+          }
+          final latest = snapshot.data!;
+          final text = latest.isEmpty
+              ? 'Belum ada sesi.'
+              : buildSessionRecap(latest.first);
+          return Text(text, style: context.type.body.copyWith(color: colors.text));
+        },
+      ),
+    );
+  }
+}
+
+/// The "Perjalanan" card (§8 milestone timeline) — one categorical line per
+/// active (module, mode): "sedang berlatih dengan ..." or, once the dial
+/// engine's ceiling is reached, "sudah menguasai ...". Read straight off the
+/// current [LadderPosition] via the same [ModuleDefinition.similarityTierCopy]
+/// the child screen's own instruction copy uses — never a level number, never
+/// a percentage, never a graph axis.
+class _MilestoneTimeline extends ConsumerWidget {
+  const _MilestoneTimeline({required this.childId});
+
+  final String childId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = context.colors;
+    return _GuardianCard(
+      title: 'Perjalanan',
+      child: FutureBuilder<List<_MilestoneEntry>>(
+        future: _loadMilestones(ref, childId),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: LinearProgressIndicator(),
+            );
+          }
+          final entries = snapshot.data!;
+          if (entries.isEmpty) {
+            return Text(
+              'Belum ada mode aktif untuk anak ini.',
+              style: context.type.body.copyWith(color: colors.text),
+            );
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final entry in entries)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    '${entry.moduleLabel} · ${entry.modeLabel}: ${entry.statusText}',
+                    style: context.type.body.copyWith(color: colors.text),
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Future<List<_MilestoneEntry>> _loadMilestones(WidgetRef ref, String childId) async {
+    final child = await ref.read(childRepositoryProvider).getChild(childId);
+    if (child == null) return const [];
+
+    final persistence = ref.read(ladderPersistenceProvider);
+    final dialEngine = ref.read(dialEngineProvider);
+
+    final entries = <_MilestoneEntry>[];
+    for (final module in ModuleId.values) {
+      final definition = _definitionFor(module);
+      for (final mode in child.availableModes) {
+        final position = await persistence.load(childId: childId, module: module, mode: mode);
+        final tierCopy = definition.similarityTierCopy[position.similarityTier];
+        final statusText = dialEngine.isAtCeiling(position, mode)
+            ? 'sudah menguasai — $tierCopy'
+            : 'sedang berlatih dengan $tierCopy';
+        entries.add(
+          _MilestoneEntry(
+            moduleLabel: definition.displayName,
+            modeLabel: modeLabel(mode),
+            statusText: statusText,
+          ),
+        );
+      }
+    }
+    return entries;
+  }
+}
+
+class _MilestoneEntry {
+  const _MilestoneEntry({
+    required this.moduleLabel,
+    required this.modeLabel,
+    required this.statusText,
+  });
+
+  final String moduleLabel;
+  final String modeLabel;
+  final String statusText;
 }

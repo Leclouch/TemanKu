@@ -41,9 +41,18 @@ class _ChildSettingsScreenState extends ConsumerState<ChildSettingsScreen> {
   Child? _child;
   bool _busy = false;
 
+  // Mirrors `soundServiceProvider`'s own state (§ audio/sound_service.dart) —
+  // read once here so the toggle/slider below start in sync with whatever
+  // the shared singleton already holds, then kept in sync on every change.
+  late bool _soundMuted;
+  late double _soundVolume;
+
   @override
   void initState() {
     super.initState();
+    final sound = ref.read(soundServiceProvider);
+    _soundMuted = sound.isMuted;
+    _soundVolume = sound.volume;
     _load();
   }
 
@@ -89,6 +98,20 @@ class _ChildSettingsScreenState extends ConsumerState<ChildSettingsScreen> {
       _child = updated;
       _busy = false;
     });
+  }
+
+  // Neither of these needs a `_busy`/confirm gate the way pronunciation-hint
+  // consent does (§10 boundary above) — sound is app-level, on-device only,
+  // trivially reversible, and turning it off is exactly the "no confirmation
+  // needed" case `_setEnabled`'s own withdrawing-consent path already models.
+  void _setSoundMuted(bool enabled) {
+    ref.read(soundServiceProvider).setMuted(!enabled);
+    setState(() => _soundMuted = !enabled);
+  }
+
+  void _setSoundVolume(double value) {
+    ref.read(soundServiceProvider).setVolume(value);
+    setState(() => _soundVolume = value);
   }
 
   @override
@@ -147,6 +170,53 @@ class _ChildSettingsScreenState extends ConsumerState<ChildSettingsScreen> {
                                     style: context.type.body.copyWith(color: colors.neutralFeedback),
                                   ),
                                 ),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Card(
+                    color: colors.background,
+                    shape: RoundedRectangleBorder(
+                      side: BorderSide(color: colors.neutralFeedback),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(
+                              'Efek suara',
+                              style: context.type.display.copyWith(color: colors.text, fontSize: 18),
+                            ),
+                            value: !_soundMuted,
+                            onChanged: _setSoundMuted,
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Bunyi singkat dan ramah saat menjawab benar atau perlu coba '
+                            'lagi — dua nada yang setara, tidak pernah suara alarm. Bisa '
+                            'dimatikan kapan saja.',
+                            style: context.type.body.copyWith(color: colors.text),
+                          ),
+                          if (!_soundMuted) ...[
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Icon(Icons.volume_down, size: 18, color: colors.neutralFeedback),
+                                Expanded(
+                                  child: Slider(
+                                    value: _soundVolume,
+                                    onChanged: _setSoundVolume,
+                                  ),
+                                ),
+                                Icon(Icons.volume_up, size: 18, color: colors.neutralFeedback),
                               ],
                             ),
                           ],

@@ -35,6 +35,11 @@ ModuleDefinition _definitionFor(ModuleId module) => switch (module) {
       ModuleId.keluarga => keluargaModule,
     };
 
+/// Every photo on this screen — draggable items and the identity-matching
+/// tier's zone exemplar alike — renders at this same size, so nothing here
+/// reads as "the important one" by virtue of being bigger.
+const double _matchImageSize = 112;
+
 class MatchModeScreen extends ConsumerStatefulWidget {
   const MatchModeScreen({super.key, required this.childId, required this.module});
 
@@ -130,6 +135,13 @@ class _MatchModeScreenState extends ConsumerState<MatchModeScreen> {
       // exactly where it was — that *is* "returns to its origin position".
       if (correct) _sortedSlots = {..._sortedSlots, itemSlot};
     });
+    // Same trigger point as the zone flash above, alongside it rather than
+    // replacing it — fire-and-forget, same reasoning as tap mode.
+    unawaited(
+      correct
+          ? ref.read(soundServiceProvider).playCorrect()
+          : ref.read(soundServiceProvider).playTryAgain(),
+    );
     unawaited(
       Future.delayed(const Duration(milliseconds: 500), () {
         if (mounted) setState(() => _zoneFlash = null);
@@ -155,7 +167,7 @@ class _MatchModeScreenState extends ConsumerState<MatchModeScreen> {
       // drop — so a mid-trial mastery moment never interrupts a partially
       // sorted array with a dialog.
       if (result.masteredAtCeiling) {
-        final shouldContinue = await showMasteryClosurePrompt(context);
+        final shouldContinue = await showMasteryClosurePrompt(context, ref);
         if (!mounted) return;
         if (!shouldContinue) {
           context.pop();
@@ -300,8 +312,9 @@ class _ItemCard extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            AspectRatio(
-              aspectRatio: 1,
+            SizedBox(
+              width: _matchImageSize,
+              height: _matchImageSize,
               child: PhotoImage(
                 localPath: photo.localPath,
                 borderRadius: BorderRadius.circular(8),
@@ -418,8 +431,8 @@ class _Zone extends StatelessWidget {
             label: exemplar?.label ?? categoryLabel,
             child: exemplar != null
                 ? SizedBox(
-                    width: 76,
-                    height: 76,
+                    width: _matchImageSize,
+                    height: _matchImageSize,
                     child: PhotoImage(
                       localPath: exemplar!.localPath,
                       borderRadius: BorderRadius.circular(8),

@@ -38,6 +38,8 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:temanku/audio/app_sound_service.dart';
+import 'package:temanku/audio/sound_service.dart';
 import 'package:temanku/data/local/local_photo_repository.dart';
 import 'package:temanku/data/repositories/child_repository.dart';
 import 'package:temanku/data/repositories/in_memory/in_memory_child_repository.dart';
@@ -124,6 +126,17 @@ final classifierServiceProvider = Provider<ClassifierService>((ref) {
 });
 
 final qualityGateProvider = Provider<QualityGate>((ref) => const ClassicalCvQualityGate());
+
+/// One instance for the whole app, same reasoning as [vadServiceProvider] —
+/// sound effects are guardian-controlled global state (mute/volume), not
+/// per-screen, so every mode screen and the guardian settings toggle must
+/// share the same instance. Only one implementation exists (no fallback
+/// column here): `audio/app_sound_service.dart` on `package:audioplayers`.
+final soundServiceProvider = Provider<SoundService>((ref) {
+  final service = AppSoundService();
+  ref.onDispose(service.dispose);
+  return service;
+});
 
 /// Keyed on `Child.pronunciationHintEnabled` — the one place that decision
 /// turns into an actual service instance. `false` (the default for every

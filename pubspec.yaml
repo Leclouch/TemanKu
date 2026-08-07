@@ -54,6 +54,11 @@ dependencies:
   # ever changes one of those, this override is the first place to check.
   vad: ^0.0.8
 
+  # Sound-effect playback (`audio/app_sound_service.dart`) — short, guardian-
+  # controlled correct/try-again/session-complete chimes only. No looping
+  # background music anywhere in the app.
+  audioplayers: ^6.1.0
+
   # NOTE: fonts are bundled as static asset files (below), not via google_fonts —
   # the app is offline-first (§11) and must not depend on a network fetch for type.
 
@@ -86,6 +91,9 @@ flutter:
     # rule the fonts comment below states for type).
     - assets/models/silero_vad_legacy.onnx
     - assets/models/makanan_labels.txt
+    # Sound-effect chimes (`audio/app_sound_service.dart`) — see
+    # assets/sounds/.gitkeep for the placeholder-vs-real-audio status.
+    - assets/sounds/
 
   fonts:
     # Display type — TemanKuTypography.display. OFL-licensed, static instances

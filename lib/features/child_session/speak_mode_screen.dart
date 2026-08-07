@@ -233,6 +233,16 @@ class _SpeakModeScreenState extends ConsumerState<SpeakModeScreen> {
     final resolved = _controller.judge(trial, outcome);
     final correct = resolved == TrialOutcome.correct;
 
+    // Same trigger point as the guardian's own ✅/❌/⭘ tap — fire-and-forget,
+    // same reasoning as tap/match mode. A notAttempted verdict gets the
+    // try-again chime too: it loops back to another attempt exactly like an
+    // incorrect one does, never a separate, harsher sound.
+    unawaited(
+      correct
+          ? ref.read(soundServiceProvider).playCorrect()
+          : ref.read(soundServiceProvider).playTryAgain(),
+    );
+
     final result = await ref.read(advancementTrackerProvider).recordResponse(
           childId: widget.childId,
           module: widget.module,
@@ -247,7 +257,7 @@ class _SpeakModeScreenState extends ConsumerState<SpeakModeScreen> {
     if (!mounted) return;
 
     if (result.masteredAtCeiling) {
-      final shouldContinue = await showMasteryClosurePrompt(context);
+      final shouldContinue = await showMasteryClosurePrompt(context, ref);
       if (!mounted) return;
       if (!shouldContinue) {
         context.pop();
@@ -360,12 +370,16 @@ class _Stimulus extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Bigger than AnswerTarget's default (and only here plus tap mode's
+    // array) — speak mode has nothing else on screen competing for space, so
+    // the single stimulus gets the largest treatment of any mode.
     return AnswerTarget(
       style: definition.targetStyle,
       label: target.label,
+      labelFontSize: 26,
       child: SizedBox(
-        width: 96,
-        height: 96,
+        width: 160,
+        height: 160,
         child: PhotoImage(localPath: target.localPath, borderRadius: BorderRadius.circular(12)),
       ),
     );

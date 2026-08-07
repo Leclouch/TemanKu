@@ -21,7 +21,9 @@ ModuleDefinition _definitionFor(ModuleId module) => switch (module) {
 
 /// Bahasa label for the response mode — names the motor channel only, never
 /// the child-facing "level" word (§4.1: mode and skill domain are separate axes).
-String _modeLabel(ResponseMode mode) => switch (mode) {
+/// Public: also used by `features/guardian/guardian_home_placeholder.dart`'s
+/// milestone timeline, so the two guardian surfaces name a mode identically.
+String modeLabel(ResponseMode mode) => switch (mode) {
       ResponseMode.tap => 'ketuk',
       ResponseMode.match => 'cocokkan',
       ResponseMode.speak => 'ucap',
@@ -44,7 +46,7 @@ String _fallbackDialNote(SessionSummary summary) {
 /// [SessionSummary.ladderAtEnd] when a session has none.
 String buildSessionRecap(SessionSummary summary) {
   final minutes = summary.duration.inMinutes;
-  final mode = _modeLabel(summary.mode);
+  final mode = modeLabel(summary.mode);
   final dialNote = summary.observations.isNotEmpty
       ? summary.observations.join(' ')
       : _fallbackDialNote(summary);

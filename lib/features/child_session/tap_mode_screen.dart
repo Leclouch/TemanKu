@@ -130,6 +130,14 @@ class _TapModeScreenState extends ConsumerState<TapModeScreen> {
       _resolving = true;
       _flash = (slot: itemSlot, correct: correct);
     });
+    // Same trigger point as the flash above, alongside it rather than
+    // replacing it — fire-and-forget so a slow/failing sound never delays
+    // the 500ms settle beat below.
+    unawaited(
+      correct
+          ? ref.read(soundServiceProvider).playCorrect()
+          : ref.read(soundServiceProvider).playTryAgain(),
+    );
 
     // One tap is one complete, independent response in tap mode — unlike
     // match mode's incremental sort, there is nothing left to keep trying
@@ -148,7 +156,7 @@ class _TapModeScreenState extends ConsumerState<TapModeScreen> {
     if (!mounted) return;
 
     if (result.masteredAtCeiling) {
-      final shouldContinue = await showMasteryClosurePrompt(context);
+      final shouldContinue = await showMasteryClosurePrompt(context, ref);
       if (!mounted) return;
       if (!shouldContinue) {
         context.pop();
@@ -305,12 +313,18 @@ class _AnswerItem extends StatelessWidget {
           ),
           // AnswerTarget always paints colour AND CategoryShape together
           // (widgets/answer_target.dart) — never colour alone.
+          //
+          // Bigger image + label than AnswerTarget's default here (and only
+          // here plus speak mode's stimulus) — tap mode's array is the child's
+          // main visual read of the trial, so it gets the larger size; match
+          // mode's zones are untouched.
           child: AnswerTarget(
             style: style,
             label: photo.label,
+            labelFontSize: 22,
             child: SizedBox(
-              width: 48,
-              height: 48,
+              width: 96,
+              height: 96,
               child: PhotoImage(localPath: photo.localPath, borderRadius: BorderRadius.circular(8)),
             ),
           ),

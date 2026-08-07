@@ -19,11 +19,17 @@ class AnswerTarget extends StatelessWidget {
     required this.style,
     this.label,
     this.child,
+    this.labelFontSize,
   });
 
   final CategoryStyle style;
   final String? label;
   final Widget? child;
+
+  /// Overrides the label's font size — null keeps [TemanKuTypography.body]'s
+  /// own size, the default every existing caller (match mode's zones among
+  /// them) still gets. Tap and speak mode pass a larger size here.
+  final double? labelFontSize;
 
   @override
   Widget build(BuildContext context) {
@@ -51,7 +57,7 @@ class AnswerTarget extends StatelessWidget {
                 textAlign: TextAlign.center,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: context.type.body.copyWith(color: colors.background),
+                style: context.type.body.copyWith(color: colors.background, fontSize: labelFontSize),
               ),
             ],
           ],
