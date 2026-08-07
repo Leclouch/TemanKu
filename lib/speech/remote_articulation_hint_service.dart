@@ -83,9 +83,18 @@ class RemoteArticulationHintService implements PronunciationHintService {
       }
 
       final confidence = decoded['confidence'];
+      final ipa = decoded['ipa'];
+      final phonemeEditDistance = decoded['phoneme_edit_distance'];
+      // Deliberately not read: the endpoint's own pass/fail verdict field
+      // (e.g. a "result": "WIN"/"TRY AGAIN" string). Never parsing it into
+      // `PronunciationHintResult` at all is what guarantees it can never
+      // leak into any UI, live or in the guardian's "Data lengkap" view —
+      // §6's correctness verdict is the guardian's ✅/❌ alone.
       return PronunciationHintResult(
         closestWord: closestWord,
         confidence: confidence is num ? confidence.toDouble() : null,
+        ipaTranscription: ipa is String && ipa.isNotEmpty ? ipa : null,
+        phonemeEditDistance: phonemeEditDistance is num ? phonemeEditDistance.toInt() : null,
       );
     } on TimeoutException {
       _logFailure('timed out after $_timeout');

@@ -49,7 +49,12 @@ abstract class SessionRepository {
   Future<void> appendTrialLog(TrialLog log);
 
   /// Trials for one session, oldest first — used to build the summary at
-  /// session end and never surfaced to the guardian raw.
+  /// session end, and, aggregated across sessions, the raw trial-count/
+  /// independent-correct tallies in `features/guardian/session_full_data.dart`'s
+  /// "Data lengkap" view. That view only ever shows counts and dates read
+  /// straight off these records (§8: never a percentage, never a score) — it
+  /// is the one deliberate exception to "not surfaced to the guardian raw";
+  /// nothing else in the app reads these directly.
   Future<List<TrialLog>> getTrialLogs(String sessionId);
 
   // --- History -----------------------------------------------------------------

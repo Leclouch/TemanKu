@@ -50,7 +50,12 @@ const int defaultPronunciationHintDifficulty = 2;
 /// correctness verdict, and nothing in this type should ever be compared
 /// against [TrialOutcome].
 class PronunciationHintResult {
-  const PronunciationHintResult({required this.closestWord, this.confidence});
+  const PronunciationHintResult({
+    required this.closestWord,
+    this.confidence,
+    this.ipaTranscription,
+    this.phonemeEditDistance,
+  });
 
   /// The word the scoring service judged the utterance closest to, for
   /// copy like "Sistem: mirip 'apel'". Guardian-facing, never child-facing —
@@ -61,4 +66,21 @@ class PronunciationHintResult {
   /// as a percentage to the child; guardian-facing display only, and only
   /// if a designer later wants it — nothing currently reads this field.
   final double? confidence;
+
+  /// The endpoint's predicted IPA transcription of the utterance, if it
+  /// supplied one. Raw technical value — only ever surfaced in the
+  /// guardian's post-session "Data lengkap" experimental subsection
+  /// (`features/guardian/pronunciation_hint_full_data.dart`), never in the
+  /// live child-facing hint line.
+  final String? ipaTranscription;
+
+  /// The endpoint's phoneme edit-distance between the utterance and
+  /// [closestWord]/the target word, if it supplied one. Same
+  /// guardian-only, post-session surfacing as [ipaTranscription] — and
+  /// deliberately framed as a distance ("jarak fonem: 0"), never as a
+  /// pass/fail label. This class never carries the endpoint's own raw
+  /// pass/fail verdict string at all — [RemoteArticulationHintService]
+  /// does not parse it into any field here, so there is nothing to
+  /// accidentally render.
+  final int? phonemeEditDistance;
 }

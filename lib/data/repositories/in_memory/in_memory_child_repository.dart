@@ -34,6 +34,11 @@ class InMemoryChildRepository implements ChildRepository {
       // Intake (§8) selected all three modes for this child. A child with no
       // speech would simply have a smaller set here — that is normal, not a gap.
       availableModes: {ResponseMode.tap, ResponseMode.match, ResponseMode.speak},
+      // Opted in, so the guardian's "Data lengkap" pronunciation-hint
+      // subsection (features/guardian/pronunciation_hint_full_data.dart) has
+      // something to render on day one — same reasoning as every other
+      // seeded field on this child.
+      pronunciationHintEnabled: true,
     );
     _children[child.id] = child;
 

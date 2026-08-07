@@ -33,6 +33,45 @@ void main() {
       expect(result.confidence, 0.87);
     });
 
+    test('parses ipa and phoneme_edit_distance when the endpoint supplies them', () async {
+      final service = RemoteArticulationHintService(
+        client: MockClient((request) async {
+          return http.Response(
+            jsonEncode({
+              'closest_word': 'apel',
+              // http.Response defaults to latin1 unless the content-type
+              // header says otherwise — the explicit header below is what
+              // lets these actual IPA codepoints round-trip.
+              'ipa': 'ʔapəl',
+              'phoneme_edit_distance': 2,
+              // The endpoint's own pass/fail verdict — must never surface
+              // anywhere, so this test proves it as a non-existent field on
+              // the result, not just an unrendered one.
+              'result': 'WIN',
+            }),
+            200,
+            headers: {'content-type': 'application/json; charset=utf-8'},
+          );
+        }),
+      );
+
+      final result = await service.scorePronunciation(audioClip: _clip, targetWord: 'apel');
+      expect(result!.ipaTranscription, 'ʔapəl');
+      expect(result.phonemeEditDistance, 2);
+    });
+
+    test('ipa and phoneme_edit_distance are null when the endpoint omits them', () async {
+      final service = RemoteArticulationHintService(
+        client: MockClient((request) async {
+          return http.Response(jsonEncode({'closest_word': 'apel'}), 200);
+        }),
+      );
+
+      final result = await service.scorePronunciation(audioClip: _clip, targetWord: 'apel');
+      expect(result!.ipaTranscription, isNull);
+      expect(result.phonemeEditDistance, isNull);
+    });
+
     test('sends target_word and difficulty as multipart fields, and the audio as a file', () async {
       String? sentTargetWord;
       String? sentDifficulty;
