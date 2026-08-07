@@ -1,5 +1,8 @@
 plugins {
     id("com.android.application")
+    // START: FlutterFire Configuration
+    id("com.google.gms.google-services")
+    // END: FlutterFire Configuration
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
@@ -38,6 +41,18 @@ kotlin {
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }
+}
+
+// tflite_flutter pulls in both org.tensorflow:tensorflow-lite and
+// org.tensorflow:tensorflow-lite-gpu, and both AARs (plus the
+// tensorflow-lite-api AAR both depend on) declare the same
+// "org.tensorflow.lite" namespace — this AGP version hard-errors on that as
+// a duplicate-namespace manifest conflict. TfliteClassifier
+// (lib/photo_pipeline/tflite_classifier.dart) never touches the GPU
+// delegate, so dropping it here is behaviourally free and reduces the
+// conflict to something AGP accepts.
+configurations.all {
+    exclude(group = "org.tensorflow", module = "tensorflow-lite-gpu")
 }
 
 flutter {

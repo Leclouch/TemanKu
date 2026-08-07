@@ -43,10 +43,17 @@ abstract class ModeController {
   ResponseMode get mode;
 
   /// Compose the next trial at [position] from [available] photos.
+  ///
+  /// [recentTargetSlots] and [recentTargetZones] are the caller's rotation
+  /// history (most recent first), fed straight to [PositionRotator] — the
+  /// same shape for every mode so the session loop never branches by mode to
+  /// assemble them. A mode with nothing to rotate on one axis (e.g. tap mode
+  /// has no zones) simply ignores that list.
   Future<Trial> nextTrial({
     required LadderPosition position,
     required List<Photo> available,
     required List<int> recentTargetSlots,
+    required List<int> recentTargetZones,
   });
 
   /// Interpret a raw response into an outcome.

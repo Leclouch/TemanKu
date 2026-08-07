@@ -1,31 +1,18 @@
-// TODO: replace with final design tokens (Claude Design)
-//
 // ============================================================================
-// PLACEHOLDER THEME — NO REAL DESIGN TOKENS IN THIS FILE, ON PURPOSE.
+// TEMANKU THEME — final design tokens (Claude Design pass).
 //
-// Visual design is being produced separately in Claude Design. This file exists
-// to establish the *shape* the real theme slots into, not its values. Every
-// colour below is a mid-grey so that nothing accidentally reads as "finished",
-// and the type scale is wired to Flutter's default fonts — Fraunces / Plus
-// Jakarta Sans / IBM Plex Mono are deliberately NOT installed or referenced yet,
-// and there is no font package in pubspec.yaml.
+// Two temperatures, one grammar ("federated design", source-of-truth §12) — the
+// child screen calm and predictable, the guardian screen warm and notebook-like.
+// Nothing outside this folder hardcodes a colour or a font size — if you find
+// yourself reaching for `Color(0x...)` in a feature file, that is the bug, not
+// a shortcut.
 //
-// WHEN THE REAL TOKENS LAND: change the values in `TemanKuColors.child` and
-// `TemanKuColors.guardian` below, and the three TextStyles in `TemanKuTypography`.
-// That is the whole swap. Nothing outside this folder hardcodes a colour or a
-// font size — if you find yourself reaching for `Color(0x...)` in a feature
-// file, that is the bug, not a shortcut.
-//
-// Source-of-truth §12 records the intended structure this shape is built for:
-// two temperatures, one grammar ("federated design") — the child screen calm and
-// predictable, the guardian screen warm and notebook-like. Two things from §12
-// are already load-bearing on structure rather than on values, so they are
-// encoded here rather than left to the design pass:
+// Two structural rules from §12 are load-bearing here, not just style choices:
 //   - the child surface has NO error/alarm slot at all (§12: no red on the child
 //     screen; "try again" is neutral, at equal visual weight to "correct");
 //   - each category gets a consistent colour AND shape, always paired, never
 //     colour alone (redundant coding, adopted from Japanese transit precedent).
-//     `categoryShape` below is the hook for the shape half of that pair.
+//     See `CategoryShape`/`CategoryStyle` in `content/module_definition.dart`.
 // ============================================================================
 
 import 'package:flutter/material.dart';
@@ -43,7 +30,8 @@ class TemanKuColors extends ThemeExtension<TemanKuColors> {
     required this.secondaryAccent,
   });
 
-  /// Page background.
+  /// Page background. Warm cream, not white — part of the calm, paper-like
+  /// surface that both temperatures share (§12).
   final Color background;
 
   /// Primary text/ink.
@@ -63,27 +51,28 @@ class TemanKuColors extends ThemeExtension<TemanKuColors> {
   /// Guardian-surface-only accent. Not used on the child screen.
   final Color secondaryAccent;
 
-  // --- PLACEHOLDER VALUES — swap these two blocks, nothing else --------------
+  // --- Final tokens (Claude Design) -------------------------------------
 
   /// Child session surface: calm, predictable, no alarm colour.
   static const child = TemanKuColors(
-    background: Color(0xFFE8E8E8),
-    text: Color(0xFF3A3A3A),
-    primaryAccent: Color(0xFF9A9A9A),
-    successFeedback: Color(0xFF8C8C8C),
-    neutralFeedback: Color(0xFFB0B0B0),
-    secondaryAccent: Color(0xFFA6A6A6),
+    background: Color(0xFFF3EFE0), // cream
+    text: Color(0xFF2B2A28), // near-black warm ink
+    primaryAccent: Color(0xFF1E8449), // green — brand/interactive, never feedback
+    successFeedback: Color(0xFF00B351), // green · always paired with a circle
+    neutralFeedback: Color(0xFFC9C2AE), // gray-cream · always paired with a square
+    secondaryAccent: Color(0xFFF780D4), // pink — guardian-only, unused here
   );
 
-  /// Guardian surface: warmer, notebook-like. Same slots, different temperature —
-  /// one grammar, two temperatures.
+  /// Guardian surface: same grammar, one shared token set (no separate
+  /// "warmer" guardian palette in this pass — secondaryAccent carries the
+  /// guardian-only warmth instead).
   static const guardian = TemanKuColors(
-    background: Color(0xFFDEDEDE),
-    text: Color(0xFF2E2E2E),
-    primaryAccent: Color(0xFF8F8F8F),
-    successFeedback: Color(0xFF848484),
-    neutralFeedback: Color(0xFFAAAAAA),
-    secondaryAccent: Color(0xFF7C7C7C),
+    background: Color(0xFFF3EFE0),
+    text: Color(0xFF2B2A28),
+    primaryAccent: Color(0xFF1E8449),
+    successFeedback: Color(0xFF00B351),
+    neutralFeedback: Color(0xFFC9C2AE),
+    secondaryAccent: Color(0xFFF780D4),
   );
 
   @override
@@ -118,8 +107,8 @@ class TemanKuColors extends ThemeExtension<TemanKuColors> {
   }
 }
 
-/// Three named type roles. Wired to Flutter's default font for now — no font
-/// package, no asset fonts, no `fontFamily` set anywhere.
+/// Three named type roles, bundled as offline static font assets (§11
+/// offline-first — no `google_fonts`, no network fetch for type).
 @immutable
 class TemanKuTypography extends ThemeExtension<TemanKuTypography> {
   const TemanKuTypography({
@@ -137,12 +126,28 @@ class TemanKuTypography extends ThemeExtension<TemanKuTypography> {
   /// Timestamps only.
   final TextStyle mono;
 
-  // --- PLACEHOLDER VALUES — swap this block when real type lands ------------
+  // Final type scale (Claude Design). Fonts bundled in pubspec.yaml under
+  // `flutter > fonts`: Nunito, Figtree, IBM Plex Mono.
+
   static const placeholder = TemanKuTypography(
-    display: TextStyle(fontSize: 28, fontWeight: FontWeight.w600, height: 1.2),
-    body: TextStyle(fontSize: 16, fontWeight: FontWeight.w400, height: 1.4),
-    // `monospace` is a Flutter-resolved generic family, not a bundled font.
-    mono: TextStyle(fontSize: 13, fontFamily: 'monospace', height: 1.3),
+    display: TextStyle(
+      fontFamily: 'Nunito',
+      fontSize: 28,
+      fontWeight: FontWeight.w900,
+      height: 1.1,
+    ),
+    body: TextStyle(
+      fontFamily: 'Figtree',
+      fontSize: 16,
+      fontWeight: FontWeight.w400,
+      height: 1.4,
+    ),
+    mono: TextStyle(
+      fontFamily: 'IBM Plex Mono',
+      fontSize: 13,
+      fontWeight: FontWeight.w400,
+      height: 1.3,
+    ),
   );
 
   @override

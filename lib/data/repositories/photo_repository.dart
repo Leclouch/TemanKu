@@ -24,6 +24,7 @@ abstract class PhotoRepository {
     required PhotoCategory category,
     String? label,
     LabelSource labelSource = LabelSource.guardian,
+    AgeGroup? ageGroup,
   });
 
   /// All photos for one child in one module, optionally narrowed to one side of

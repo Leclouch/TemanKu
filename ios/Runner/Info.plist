@@ -26,6 +26,18 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>TemanKu perlu akses kamera untuk memotret benda yang dipakai dalam sesi anak.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>TemanKu perlu akses galeri untuk memilih foto yang dipakai dalam sesi anak.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<!-- iOS shows one description for every mic consumer in the app, so this
+	     has to cover both truthfully — see speech/silero_vad_service.dart
+	     (default, detection-only, nothing recorded or sent) and
+	     speech/audio_segment_recorder.dart (opt-in per child, does record and
+	     send). Leaving out the second sentence when the hint feature exists
+	     would make the first sentence a privacy claim the app doesn't keep. -->
+	<string>Aplikasi ini menggunakan mikrofon untuk mendeteksi kapan anak berbicara, tanpa merekam atau menyimpan suara. Jika wali mengaktifkan fitur saran pengucapan (eksperimental) untuk anak tertentu, rekaman singkat akan dikirim ke server luar khusus untuk fitur tersebut.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

@@ -21,7 +21,8 @@ void main() {
       expect(start.similarityTier, SimilarityTier.differentCategory);
     });
 
-    test('has value equality, so engine transitions are directly assertable', () {
+    test('has value equality, so engine transitions are directly assertable',
+        () {
       const a = LadderPosition(
         arraySize: 3,
         similarityTier: SimilarityTier.sameCategoryDistinct,
@@ -53,12 +54,7 @@ void main() {
     });
   });
 
-  // TODO(IT-1) Day 2 — the tests that actually matter:
-  //   - dial_engine: 2→3→4 within a tier, never skipping
-  //   - dial_engine: advancing at array 4 steps similarity up AND resets array to 2
-  //   - dial_engine: lrffc + array 4 + advance → unchanged (top of ladder)
-  //   - dial_engine: speak mode never touches the array dial
-  //   - rotation: recent slots [1, 1] excludes slot 1; [1] does not
-  //   - advancement: a correct answer WITH the hint breaks the independent run
-  //   - advancement: notAttempted is handled distinctly from incorrect
+  // The substantive dial/rotation/advancement cases now live in their own
+  // files: dial_engine_test.dart, position_rotator_test.dart,
+  // advancement_tracker_test.dart, ladder_persistence_test.dart.
 }

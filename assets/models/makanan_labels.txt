@@ -1,0 +1,15 @@
+0 Donat
+1 Telur_Rebus
+2 Permen
+3 Kripik
+4 Biskuit
+5 Roti
+6 Apel
+7 Pisang
+8 Bola
+9 Sepatu
+10 Pensil
+11 Buku
+12 Sikat Gigi
+13 Mobil Mainan
+14 Background_Empty

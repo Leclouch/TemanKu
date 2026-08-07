@@ -16,6 +16,7 @@ class Photo {
     required this.category,
     this.label,
     this.labelSource = LabelSource.guardian,
+    this.ageGroup,
   });
 
   final String id;
@@ -36,7 +37,18 @@ class Photo {
 
   final LabelSource labelSource;
 
-  Photo copyWith({String? label, LabelSource? labelSource}) => Photo(
+  /// The person's apparent age group — **Keluarga only** (§4.4). This is
+  /// what `photo_pipeline/stranger_library/` compares a target photo against
+  /// to pick demographically-appropriate distractors; it is meaningless for
+  /// modules without a demographic similarity axis and stays null there.
+  final AgeGroup? ageGroup;
+
+  Photo copyWith({
+    String? label,
+    LabelSource? labelSource,
+    AgeGroup? ageGroup,
+  }) =>
+      Photo(
         id: id,
         childId: childId,
         module: module,
@@ -44,6 +56,7 @@ class Photo {
         category: category,
         label: label ?? this.label,
         labelSource: labelSource ?? this.labelSource,
+        ageGroup: ageGroup ?? this.ageGroup,
       );
 }
 

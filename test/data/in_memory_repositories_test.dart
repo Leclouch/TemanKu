@@ -40,17 +40,44 @@ void main() {
       expect(position, const LadderPosition.start());
     });
 
-    test('photo library has both categories in both modules', () async {
+    test('Makanan has both categories in the repository', () async {
       final repo = InMemoryPhotoRepository();
       addTearDown(repo.dispose);
 
-      for (final module in ModuleId.values) {
-        final counts = await repo.countByCategory(
-          childId: 'child_arif',
-          module: module,
-        );
-        expect(counts[PhotoCategory.target], greaterThan(0));
-        expect(counts[PhotoCategory.distractor], greaterThan(0));
+      final counts = await repo.countByCategory(
+        childId: 'child_arif',
+        module: ModuleId.makanan,
+      );
+      expect(counts[PhotoCategory.target], greaterThan(0));
+      expect(counts[PhotoCategory.distractor], greaterThan(0));
+    });
+
+    test('Keluarga has target photos but no distractor photos — its '
+        'distractors are bundled stranger-library assets, never stored '
+        'per-child (module_definition.dart usesBundledDistractors)', () async {
+      final repo = InMemoryPhotoRepository();
+      addTearDown(repo.dispose);
+
+      final counts = await repo.countByCategory(
+        childId: 'child_arif',
+        module: ModuleId.keluarga,
+      );
+      expect(counts[PhotoCategory.target], greaterThan(0));
+      expect(counts[PhotoCategory.distractor], 0);
+    });
+
+    test('every seeded Keluarga target photo carries an age group', () async {
+      final repo = InMemoryPhotoRepository();
+      addTearDown(repo.dispose);
+
+      final targets = await repo.listPhotos(
+        childId: 'child_arif',
+        module: ModuleId.keluarga,
+        category: PhotoCategory.target,
+      );
+      expect(targets, isNotEmpty);
+      for (final photo in targets) {
+        expect(photo.ageGroup, isNotNull, reason: '${photo.label} has no age group');
       }
     });
 
@@ -149,6 +176,7 @@ void main() {
           latency: const Duration(milliseconds: 900),
           hintShown: false,
           targetSlot: 1,
+          responseSlot: 1,
         ),
       );
 

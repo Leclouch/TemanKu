@@ -79,6 +79,19 @@ void runChildRepositoryContractTests(
       expect(reloaded.availableModes, contains(ResponseMode.speak));
     });
 
+    test('pronunciationHintEnabled defaults false and persists an explicit opt-in', () async {
+      // The pronunciation-hint consent gate (features/guardian/child_settings_screen.dart)
+      // — off for every child until a guardian explicitly flips it, and that
+      // flip must survive exactly like every other field on Child.
+      final child = await repo.createChild(name: 'Arif', availableModes: {ResponseMode.speak});
+      expect(child.pronunciationHintEnabled, isFalse);
+
+      await repo.updateChild(child.copyWith(pronunciationHintEnabled: true));
+
+      final reloaded = await repo.getChild(child.id);
+      expect(reloaded!.pronunciationHintEnabled, isTrue);
+    });
+
     test('deleteChild removes the profile', () async {
       final child = await repo.createChild(
         name: 'Arif',

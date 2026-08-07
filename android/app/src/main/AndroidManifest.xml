@@ -1,4 +1,23 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- image_picker: camera capture for the guardian photo-upload flow (§5.1).
+         Gallery picking uses the system Photo Picker on API 33+ and needs no
+         storage permission; camera capture does. -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <!-- RECORD_AUDIO has two on-device-only consumers, both requested at
+         speak-mode entry (not app launch), never at startup:
+           - speech/silero_vad_service.dart — the default VadService. Detects
+             *that and when* the child spoke; never records to a file, never
+             transmitted anywhere.
+           - speech/audio_segment_recorder.dart — the optional pronunciation-
+             hint feature, which DOES capture and transmit a short clip, but
+             only when a guardian has explicitly opted a child in
+             (Child.pronunciationHintEnabled — features/guardian/child_settings_screen.dart's
+             consent screen). Off by default.
+         MODIFY_AUDIO_SETTINGS backs the voice-call-optimised audio routing
+         `package:vad` requests by default (AndroidRecordConfig's
+         audioManagerMode/speakerphone) for cleaner VAD input. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
     <application
         android:label="temanku"
         android:name="${applicationName}"

@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 import 'package:temanku/content/module_definition.dart';
 import 'package:temanku/core/constants/domain_enums.dart';
 
@@ -18,7 +20,15 @@ const keluargaModule = ModuleDefinition(
   id: ModuleId.keluarga,
   displayName: 'Keluarga',
   targetCategoryLabel: 'keluargaku',
-  distractorCategoryLabel: 'bukan keluargaku',
+  distractorCategoryLabel: 'bukan keluarga',
+  targetStyle: CategoryStyle(
+    color: Color(0xFF2668FD),
+    shape: CategoryShape.circle,
+  ),
+  distractorStyle: CategoryStyle(
+    color: Color(0xFFC9C2AE),
+    shape: CategoryShape.square,
+  ),
   // Permanently false: guardian supplies name/relationship directly — the only
   // valid source for that data (§5.3). This is not a deferred feature.
   usesClassifier: false,

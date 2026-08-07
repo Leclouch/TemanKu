@@ -1,5 +1,15 @@
 import 'package:temanku/core/constants/domain_enums.dart';
 
+/// Whether a child has a formal diagnosis — **context only** (§8 intake).
+///
+/// Collected by `features/onboarding/intake_screen.dart` and stored here, but
+/// deliberately inert: nothing in the engine, content, or mode selection may
+/// ever branch on this field. It exists so a guardian's answer isn't lost, not
+/// so the app can gate on it. If a future PR adds an `if (diagnosisStatus...)`
+/// anywhere outside a guardian-facing display, that is the constraint this
+/// comment exists to catch.
+enum DiagnosisStatus { diagnosed, notDiagnosed, unsure }
+
 /// A child profile. Source-of-truth §9: one guardian account → many child profiles;
 /// each child owns their photo library, ladder positions, session history, intake.
 class Child {
@@ -7,6 +17,8 @@ class Child {
     required this.id,
     required this.name,
     required this.availableModes,
+    this.diagnosisStatus,
+    this.pronunciationHintEnabled = false,
   });
 
   final String id;
@@ -16,10 +28,36 @@ class Child {
   /// predicts levels. A child with no speech may simply have no `speak` here.
   final Set<ResponseMode> availableModes;
 
-  Child copyWith({String? name, Set<ResponseMode>? availableModes}) => Child(
+  /// Null until intake has been answered — distinct from [DiagnosisStatus.unsure],
+  /// which is the guardian's explicit "I'm not sure" answer.
+  final DiagnosisStatus? diagnosisStatus;
+
+  /// Per-child consent for the optional pronunciation-hint layer in speak
+  /// mode (`speech/pronunciation_hint_service.dart`). Default **off**. Only
+  /// when this is true does `core/service_locator.dart` ever bind
+  /// `RemoteArticulationHintService` — and only then does
+  /// `features/child_session/speak_mode_screen.dart` ever record a clip of
+  /// the child's voice to send off-device. Flipping this on is the explicit
+  /// consent gate; see `features/guardian/child_settings_screen.dart` for
+  /// the copy shown before it can be set true.
+  ///
+  /// Strictly advisory either way (§6): this field never touches which
+  /// response mode is offered, the ladder, or correctness — it only decides
+  /// whether a hint line may appear next to the guardian's own ✅/❌.
+  final bool pronunciationHintEnabled;
+
+  Child copyWith({
+    String? name,
+    Set<ResponseMode>? availableModes,
+    DiagnosisStatus? diagnosisStatus,
+    bool? pronunciationHintEnabled,
+  }) =>
+      Child(
         id: id,
         name: name ?? this.name,
         availableModes: availableModes ?? this.availableModes,
+        diagnosisStatus: diagnosisStatus ?? this.diagnosisStatus,
+        pronunciationHintEnabled: pronunciationHintEnabled ?? this.pronunciationHintEnabled,
       );
 }
 

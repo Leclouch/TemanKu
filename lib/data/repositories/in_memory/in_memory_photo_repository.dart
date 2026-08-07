@@ -37,19 +37,24 @@ class InMemoryPhotoRepository implements PhotoRepository {
     _add('child_arif', ModuleId.makanan, 'wortel', PhotoCategory.distractor);
 
     // Keluarga — targets are the child's actual family (guardian-labelled, no
-    // model, §5.3). Distractors here stand in for the bundled stranger library;
-    // in the real implementation they are read from assets, not from the child's
-    // own photo store.
-    _add('child_arif', ModuleId.keluarga, 'Ibu', PhotoCategory.target);
-    _add('child_arif', ModuleId.keluarga, 'Ayah', PhotoCategory.target);
-    _add('child_arif', ModuleId.keluarga, 'Kakak Sari', PhotoCategory.target);
-    _add('child_arif', ModuleId.keluarga, 'Nenek', PhotoCategory.target);
-    _add('child_arif', ModuleId.keluarga, 'stranger_adult_f_01', PhotoCategory.distractor);
-    _add('child_arif', ModuleId.keluarga, 'stranger_adult_m_02', PhotoCategory.distractor);
-    _add('child_arif', ModuleId.keluarga, 'stranger_child_f_03', PhotoCategory.distractor);
+    // model, §5.3), each tagged with the age group `stranger_library/` needs
+    // to pick demographically-appropriate distractors against. There are no
+    // Keluarga *distractor* photos here on purpose — usesBundledDistractors
+    // (module_definition.dart) means those come from the bundled stranger
+    // library, never from a child's own photo store.
+    _add('child_arif', ModuleId.keluarga, 'Ibu', PhotoCategory.target, ageGroup: AgeGroup.adult);
+    _add('child_arif', ModuleId.keluarga, 'Ayah', PhotoCategory.target, ageGroup: AgeGroup.adult);
+    _add('child_arif', ModuleId.keluarga, 'Kakak Sari', PhotoCategory.target, ageGroup: AgeGroup.teen);
+    _add('child_arif', ModuleId.keluarga, 'Nenek', PhotoCategory.target, ageGroup: AgeGroup.elderly);
   }
 
-  void _add(String childId, ModuleId module, String label, PhotoCategory category) {
+  void _add(
+    String childId,
+    ModuleId module,
+    String label,
+    PhotoCategory category, {
+    AgeGroup? ageGroup,
+  }) {
     final id = 'photo_${++_idCounter}';
     _photos[id] = Photo(
       id: id,
@@ -58,6 +63,7 @@ class InMemoryPhotoRepository implements PhotoRepository {
       localPath: '/fake/local/$childId/${module.name}/$id.jpg',
       category: category,
       label: label,
+      ageGroup: ageGroup,
     );
   }
 
@@ -94,6 +100,7 @@ class InMemoryPhotoRepository implements PhotoRepository {
     required PhotoCategory category,
     String? label,
     LabelSource labelSource = LabelSource.guardian,
+    AgeGroup? ageGroup,
   }) async {
     final id = 'photo_${++_idCounter}';
     final photo = Photo(
@@ -104,6 +111,7 @@ class InMemoryPhotoRepository implements PhotoRepository {
       category: category,
       label: label,
       labelSource: labelSource,
+      ageGroup: ageGroup,
     );
     _photos[id] = photo;
     _emit(childId, module);

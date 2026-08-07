@@ -16,17 +16,44 @@ library;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import 'package:temanku/features/child_session/child_session_placeholder.dart';
+import 'package:temanku/core/constants/domain_enums.dart';
+import 'package:temanku/features/child_session/day_arc_screen.dart';
+import 'package:temanku/features/child_session/match_mode_screen.dart';
+import 'package:temanku/features/child_session/speak_mode_screen.dart';
+import 'package:temanku/features/child_session/tap_mode_screen.dart';
+import 'package:temanku/features/guardian/child_settings_screen.dart';
 import 'package:temanku/features/guardian/guardian_home_placeholder.dart';
+import 'package:temanku/features/guardian/photo_library_screen.dart';
+import 'package:temanku/features/guardian/photo_upload_screen.dart';
+import 'package:temanku/features/onboarding/intake_screen.dart';
 import 'package:temanku/features/onboarding/select_child_screen.dart';
 
 abstract final class Routes {
   static const selectChild = '/';
   static const childSession = '/session/:childId';
+  static const matchSession = '/session/:childId/match/:module';
+  static const tapSession = '/session/:childId/tap/:module';
+  static const speakSession = '/session/:childId/speak/:module';
   static const guardianHome = '/guardian/:childId';
+  static const childSettings = '/guardian/:childId/settings';
+  static const photoUpload = '/guardian/:childId/upload/:module';
+  static const photoLibrary = '/guardian/:childId/photos/:module';
+  static const intake = '/intake/:childId';
 
   static String sessionFor(String childId) => '/session/$childId';
+  static String matchSessionFor(String childId, ModuleId module) =>
+      '/session/$childId/match/${module.name}';
+  static String tapSessionFor(String childId, ModuleId module) =>
+      '/session/$childId/tap/${module.name}';
+  static String speakSessionFor(String childId, ModuleId module) =>
+      '/session/$childId/speak/${module.name}';
   static String guardianFor(String childId) => '/guardian/$childId';
+  static String childSettingsFor(String childId) => '/guardian/$childId/settings';
+  static String photoUploadFor(String childId, ModuleId module) =>
+      '/guardian/$childId/upload/${module.name}';
+  static String photoLibraryFor(String childId, ModuleId module) =>
+      '/guardian/$childId/photos/${module.name}';
+  static String intakeFor(String childId) => '/intake/$childId';
 }
 
 final appRouter = GoRouter(
@@ -38,13 +65,60 @@ final appRouter = GoRouter(
     ),
     GoRoute(
       path: Routes.childSession,
-      builder: (context, state) => ChildSessionPlaceholder(
+      builder: (context, state) => DayArcScreen(
         childId: state.pathParameters['childId']!,
+      ),
+    ),
+    GoRoute(
+      path: Routes.matchSession,
+      builder: (context, state) => MatchModeScreen(
+        childId: state.pathParameters['childId']!,
+        module: ModuleId.values.byName(state.pathParameters['module']!),
+      ),
+    ),
+    GoRoute(
+      path: Routes.tapSession,
+      builder: (context, state) => TapModeScreen(
+        childId: state.pathParameters['childId']!,
+        module: ModuleId.values.byName(state.pathParameters['module']!),
+      ),
+    ),
+    GoRoute(
+      path: Routes.speakSession,
+      builder: (context, state) => SpeakModeScreen(
+        childId: state.pathParameters['childId']!,
+        module: ModuleId.values.byName(state.pathParameters['module']!),
       ),
     ),
     GoRoute(
       path: Routes.guardianHome,
       builder: (context, state) => GuardianHomePlaceholder(
+        childId: state.pathParameters['childId']!,
+      ),
+    ),
+    GoRoute(
+      path: Routes.childSettings,
+      builder: (context, state) => ChildSettingsScreen(
+        childId: state.pathParameters['childId']!,
+      ),
+    ),
+    GoRoute(
+      path: Routes.photoUpload,
+      builder: (context, state) => PhotoUploadScreen(
+        childId: state.pathParameters['childId']!,
+        module: ModuleId.values.byName(state.pathParameters['module']!),
+      ),
+    ),
+    GoRoute(
+      path: Routes.photoLibrary,
+      builder: (context, state) => PhotoLibraryScreen(
+        childId: state.pathParameters['childId']!,
+        module: ModuleId.values.byName(state.pathParameters['module']!),
+      ),
+    ),
+    GoRoute(
+      path: Routes.intake,
+      builder: (context, state) => IntakeScreen(
         childId: state.pathParameters['childId']!,
       ),
     ),

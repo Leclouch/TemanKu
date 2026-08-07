@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 import 'package:temanku/content/module_definition.dart';
 import 'package:temanku/core/constants/domain_enums.dart';
 
@@ -13,6 +15,14 @@ const makananModule = ModuleDefinition(
   displayName: 'Makanan',
   targetCategoryLabel: 'boleh dimakan',
   distractorCategoryLabel: 'bukan makanan',
+  targetStyle: CategoryStyle(
+    color: Color(0xFF00B351),
+    shape: CategoryShape.circle,
+  ),
+  distractorStyle: CategoryStyle(
+    color: Color(0xFFF780D4),
+    shape: CategoryShape.diamond,
+  ),
   usesClassifier: true,
   usesBundledDistractors: false,
   similarityTierCopy: {

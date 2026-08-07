@@ -96,6 +96,7 @@ class TrialLog {
     required this.latency,
     required this.hintShown,
     required this.targetSlot,
+    required this.responseSlot,
   });
 
   final String sessionId;
@@ -106,7 +107,13 @@ class TrialLog {
   /// the hint** (§4.5).
   final bool hintShown;
 
-  /// Which slot the target occupied, for the ≤2-consecutive-repeat guard and the
-  /// repeated-same-position-tapping signal (§4.4, §7).
+  /// Which slot the target occupied — for the ≤2-consecutive-repeat guard.
   final int targetSlot;
+
+  /// Which slot the child actually responded to — the tapped slot in tap
+  /// mode, the zone dropped into in match mode. Distinct from [targetSlot]
+  /// on purpose: the repeated-same-position disengagement signal (§7) is
+  /// about where the *child* keeps landing regardless of where the target
+  /// was, which `targetSlot` alone cannot tell you once a response is wrong.
+  final int responseSlot;
 }

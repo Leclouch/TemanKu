@@ -25,17 +25,51 @@ dependencies:
   # Hive chosen for the key-value-shaped ladder/session state. See README "Package choices".
   hive: ^2.2.3
   hive_flutter: ^1.1.0
+  path_provider: ^2.1.6
 
   # Routing — see README "Package choices".
   go_router: ^14.2.0
+  image_picker: ^1.2.3
+  image: ^4.9.1
 
-  # NOTE: no font package (google_fonts) on purpose. Theming is a placeholder for
-  # this pass; final tokens land from Claude Design. See lib/core/theme/.
+  # Primary classifier (§11, ADR-4) — TFLite MobileNet-class model exported
+  # from Teachable Machine. See `photo_pipeline/tflite_classifier.dart`.
+  tflite_flutter: ^0.11.0
+
+  # Pronunciation-hint layer (advisory only, opt-in per child — see
+  # `speech/pronunciation_hint_service.dart`). http calls the scoring
+  # endpoint; record captures the 16kHz WAV clip sent with it. Neither is
+  # used anywhere else — the guardian's ✅/❌ never depends on either package.
+  http: ^1.6.0
+  record: ^7.1.1
+
+  # Primary VAD implementation (ADR-4, speech/silero_vad_service.dart) — FFI
+  # bindings to ONNX Runtime running Silero VAD locally, on-device. vad 0.0.8
+  # itself constrains record to ^6.1.2; the override two sections down pins
+  # our already-adopted 7.1.1 instead. Checked before relying on it: every
+  # record API vad 0.0.8's source actually calls (AudioRecorder, RecordConfig,
+  # AndroidRecordConfig incl. its audioSource/audioManagerMode fields,
+  # AudioEncoder) is unchanged in record_platform_interface 2.1.0 (the version
+  # 7.1.1 resolves to) — same shapes, same members. If a future `record` bump
+  # ever changes one of those, this override is the first place to check.
+  vad: ^0.0.8
+
+  # NOTE: fonts are bundled as static asset files (below), not via google_fonts —
+  # the app is offline-first (§11) and must not depend on a network fetch for type.
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+  image_picker_platform_interface: ^2.11.1
+  cross_file: ^0.3.5+4
+
+dependency_overrides:
+  # Forces vad's transitive `record: ^6.1.2` constraint up to the 7.1.1 this
+  # project already depends on directly (see the `vad:` entry above for why
+  # this is safe) — without it, `pub get` backs vad down to 0.0.2, a much
+  # older WebView-wrapped release with a completely different API.
+  record: ^7.1.1
 
 flutter:
   uses-material-design: true
@@ -44,3 +78,43 @@ flutter:
     # Bundled Keluarga distractor faces (source-of-truth §5.3). Directory is
     # committed with a .gitkeep; drop the licensed/synthetic 10–15 image set here.
     - assets/stranger_library/
+    - assets/models/makanan_classifier.tflite
+    # Silero VAD (legacy/v4) ONNX model — speech/silero_vad_service.dart passes
+    # this as `baseAssetPath` to package:vad, which loads any non-http(s) path
+    # via rootBundle rather than its CDN default. Bundled locally so speak mode
+    # never needs a network fetch to detect speech (§11 offline-first, same
+    # rule the fonts comment below states for type).
+    - assets/models/silero_vad_legacy.onnx
+    - assets/models/makanan_labels.txt
+
+  fonts:
+    # Display type — TemanKuTypography.display. OFL-licensed, static instances
+    # cut from the upstream variable font; see assets/fonts/nunito/Nunito-OFL.txt.
+    - family: Nunito
+      fonts:
+        - asset: assets/fonts/nunito/Nunito-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/nunito/Nunito-ExtraBold.ttf
+          weight: 800
+        - asset: assets/fonts/nunito/Nunito-Black.ttf
+          weight: 900
+
+    # Body type — TemanKuTypography.body. See assets/fonts/figtree/Figtree-OFL.txt.
+    - family: Figtree
+      fonts:
+        - asset: assets/fonts/figtree/Figtree-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/figtree/Figtree-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/figtree/Figtree-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/figtree/Figtree-Bold.ttf
+          weight: 700
+
+    # Mono type — TemanKuTypography.mono. See assets/fonts/ibm_plex_mono/IBMPlexMono-OFL.txt.
+    - family: IBM Plex Mono
+      fonts:
+        - asset: assets/fonts/ibm_plex_mono/IBMPlexMono-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/ibm_plex_mono/IBMPlexMono-Medium.ttf
+          weight: 500

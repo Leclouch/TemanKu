@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:temanku/core/constants/domain_enums.dart';
 import 'package:temanku/core/routing/app_router.dart';
 import 'package:temanku/core/service_locator.dart';
 import 'package:temanku/core/theme/temanku_theme.dart';
@@ -56,10 +57,58 @@ class SelectChildScreen extends ConsumerWidget {
                   ref.read(selectedChildIdProvider.notifier).state = child.id;
                   context.push(Routes.sessionFor(child.id));
                 },
-                trailing: IconButton(
-                  icon: const Icon(Icons.menu_book_outlined),
-                  tooltip: 'Catatan wali',
-                  onPressed: () => context.push(Routes.guardianFor(child.id)),
+                // A fixed-width box, not a bare Row — ListTile.trailing queries
+                // its child's intrinsic width, and IconButton reports that
+                // unreliably inside a Row, which throws a layout assertion at
+                // phone width once three buttons are packed in here. Giving it
+                // a hard bound sidesteps the intrinsic query entirely.
+                trailing: SizedBox(
+                  width: 4 * 40,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // Direct dev/QA doorways into tap/match/speak mode on
+                      // Makanan specifically, bypassing the real per-child mode
+                      // selection `features/child_session/day_arc_screen.dart`
+                      // does (that's what the row's own onTap below leads to —
+                      // this row is the actual guardian path). Kept only for
+                      // testing a fixed mode+module pair directly.
+                      IconButton(
+                        icon: const Icon(Icons.touch_app_outlined),
+                        tooltip: 'Latihan menunjuk (Makanan)',
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        onPressed: () => context.push(
+                          Routes.tapSessionFor(child.id, ModuleId.makanan),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.extension_outlined),
+                        tooltip: 'Latihan mencocokkan (Makanan)',
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        onPressed: () => context.push(
+                          Routes.matchSessionFor(child.id, ModuleId.makanan),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.mic_outlined),
+                        tooltip: 'Latihan mengucap (Makanan)',
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        onPressed: () => context.push(
+                          Routes.speakSessionFor(child.id, ModuleId.makanan),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.menu_book_outlined),
+                        tooltip: 'Catatan wali',
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        onPressed: () => context.push(Routes.guardianFor(child.id)),
+                      ),
+                    ],
+                  ),
                 ),
               );
             },

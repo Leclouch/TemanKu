@@ -24,9 +24,9 @@ enum ModuleId {
 /// Distractor-similarity tier — the second of the two independent dials (§4.4).
 ///
 /// For Makanan these are visual/categorical. For Keluarga the same tiers mean
-/// **demographic closeness of the stranger** (different age group → same-age
-/// same-gender), which is why the tier is named abstractly rather than, say,
-/// `visuallySimilar`.
+/// **demographic closeness of the stranger** (different age group → same age
+/// group as the target — see [AgeGroup] and `photo_pipeline/stranger_library/`),
+/// which is why the tier is named abstractly rather than, say, `visuallySimilar`.
 enum SimilarityTier {
   /// Step 1–3: distractors from a different category entirely.
   differentCategory,
@@ -47,6 +47,18 @@ enum SimilarityTier {
 abstract final class ArraySize {
   static const int min = 2;
   static const int max = 4;
+}
+
+/// Demographic age group — Keluarga's similarity axis (§4.4). Tags both the
+/// guardian's own target photos (a person's apparent age group, supplied at
+/// upload — `features/guardian/photo_upload_screen.dart`) and the bundled
+/// stranger distractors (`photo_pipeline/stranger_library/`), so the two can
+/// be compared for demographic closeness. Not used outside Keluarga.
+enum AgeGroup {
+  child,
+  teen,
+  adult,
+  elderly,
 }
 
 /// Outcome of a single trial, from the engine's point of view.
