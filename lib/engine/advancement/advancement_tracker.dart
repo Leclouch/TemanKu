@@ -69,6 +69,18 @@ class AdvancementTracker {
   }) =>
       _streaks[(childId, module, mode)] ?? 0;
 
+  /// Clears the in-memory streak for one child, module, and response mode.
+  ///
+  /// Guardian level overrides use this after persisting a new position so a
+  /// partial streak cannot carry across the override.
+  void resetStreak({
+    required String childId,
+    required ModuleId module,
+    required ResponseMode mode,
+  }) {
+    _streaks.remove((childId, module, mode));
+  }
+
   /// Records the outcome of one trial. Only a correct response given without
   /// a hint extends the streak; anything else resets it.
   ///
@@ -112,6 +124,7 @@ class AdvancementTracker {
       mode: mode,
       position: next,
     );
-    return AdvancementResult(position: next, masteredAtCeiling: masteredAtCeiling);
+    return AdvancementResult(
+        position: next, masteredAtCeiling: masteredAtCeiling);
   }
 }

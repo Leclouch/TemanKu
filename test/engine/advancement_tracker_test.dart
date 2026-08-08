@@ -197,6 +197,36 @@ void main() {
     expect(child2Streak, 2);
   });
 
+  test('resetStreak clears only the exact child module and mode streak',
+      () async {
+    await tracker.recordResponse(
+      childId: childId,
+      module: module,
+      mode: mode,
+      correct: true,
+      hintShown: false,
+    );
+    await tracker.recordResponse(
+      childId: childId,
+      module: ModuleId.keluarga,
+      mode: ResponseMode.match,
+      correct: true,
+      hintShown: false,
+    );
+
+    tracker.resetStreak(childId: childId, module: module, mode: mode);
+
+    expect(tracker.streakFor(childId: childId, module: module, mode: mode), 0);
+    expect(
+      tracker.streakFor(
+        childId: childId,
+        module: ModuleId.keluarga,
+        mode: ResponseMode.match,
+      ),
+      1,
+    );
+  });
+
   test('only clearing a streak at LRFFC array 4 triggers mastery', () async {
     final persistence = LadderPersistence(InMemoryChildRepository(seed: false));
     // Array four is the celebrated milestone despite the extended practice.
