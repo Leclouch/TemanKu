@@ -47,6 +47,7 @@ enum SimilarityTier {
 abstract final class ArraySize {
   static const int min = 2;
   static const int max = 4;
+  static const int extendedMax = 6;
 }
 
 /// Demographic age group — Keluarga's similarity axis (§4.4). Tags both the

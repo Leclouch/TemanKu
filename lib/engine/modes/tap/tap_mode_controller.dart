@@ -7,24 +7,36 @@ import 'package:temanku/engine/modes/mode_controller.dart';
 import 'package:temanku/engine/rotation/position_rotator.dart';
 import 'package:temanku/photo_pipeline/stranger_library/stranger_library.dart';
 
+class TapTrial extends Trial {
+  const TapTrial({
+    required super.target,
+    required super.items,
+    required super.targetSlot,
+    required super.instruction,
+    required this.targetSlots,
+    super.hintShown,
+  });
+
+  final List<int> targetSlots;
+}
+
 /// Tap mode — **IT-1, Day 2** (the first mode end-to-end, on Makanan).
 ///
 /// §4.1: Listener Responding, climbing to LRFFC. The child taps the item named
 /// by the instruction; at the top tier the instruction becomes semantic
 /// ("tunjuk yang boleh dimakan") over a mixed array.
 ///
-/// ## Composition, deliberately identical in shape to match mode
+/// ## Composition
 ///
-/// Every tier composes the *same* array — one target-category photo plus
-/// `arraySize - 1` distractor-category photos, placed via the shared
-/// [PositionRotator] guard — exactly `MatchModeController`'s approach. "Mixed
-/// array" at the LRFFC tier describes the *instruction* no longer naming one
-/// specific exemplar, not a change in how many target-category items are on
-/// screen: [PositionRotator] and the shared trial log's single `targetSlot`
-/// have no notion of more than one target slot, so a second "which target"
-/// axis is not something this pass invents. This mirrors exactly how match
-/// mode's own LRFFC tier only changes zone naming, never item composition —
-/// see `engine/modes/match/match_mode_controller.dart`.
+/// Legacy tap positions, including LRFFC arrays through size four, compose one
+/// target-category photo and `arraySize - 1` distractors. Their target slot is
+/// assigned by the shared [PositionRotator] guard, exactly as before.
+///
+/// Extended LRFFC positions (array sizes five and six) compose exactly two
+/// eligible target-category photos. [TapTrial.targetSlots] records both slots;
+/// [Trial.targetSlot] remains the first target slot so the shared rotation
+/// history remains compatible. Distractor slots are composed through the
+/// multi-target [PositionRotator] APIs.
 ///
 /// Response type for [judge] is the tapped slot index (`int`).
 class TapModeController implements ModeController {
@@ -47,7 +59,7 @@ class TapModeController implements ModeController {
   ResponseMode get mode => ResponseMode.tap;
 
   @override
-  Future<Trial> nextTrial({
+  Future<TapTrial> nextTrial({
     required LadderPosition position,
     required List<Photo> available,
     required List<int> recentTargetSlots,
@@ -62,6 +74,50 @@ class TapModeController implements ModeController {
         .where((p) => p.category == PhotoCategory.target && (!requiresLabel || p.label != null))
         .toList()
       ..shuffle();
+    final targetCount = _dialEngine.targetCountFor(position, mode);
+    if (targetCount == 2) {
+      if (targets.length < targetCount) {
+        throw StateError(
+          'Two target photos are needed to compose a tap trial.',
+        );
+      }
+      final targetPhotos = targets.take(targetCount).toList();
+      final distractorCount = _dialEngine.distractorCountFor(position, mode);
+      final chosenDistractors = _definition.usesBundledDistractors
+          ? await _bundledDistractors(
+              targetPhotos.first,
+              position.similarityTier,
+              distractorCount,
+            )
+          : _ownPhotoDistractors(available, distractorCount);
+      final targetSlots = _rotator.nextTargetSlots(
+        arraySize: position.arraySize,
+        count: targetCount,
+        recentPrimaryTargetSlots: recentTargetSlots,
+      );
+      final itemOrder = _rotator.shuffleSlotsMulti(
+        arraySize: position.arraySize,
+        targetSlots: targetSlots,
+      );
+      final items = [
+        for (final itemIndex in itemOrder)
+          itemIndex < targetCount
+              ? targetPhotos[itemIndex]
+              : chosenDistractors[itemIndex - targetCount],
+      ];
+
+      return TapTrial(
+        target: targetPhotos.first,
+        items: items,
+        targetSlot: targetSlots.first,
+        targetSlots: targetSlots,
+        instruction:
+            _instructionFor(targetPhotos.first, position.similarityTier),
+      );
+    }
+    if (targetCount != 1) {
+      throw StateError('Tap mode supports one or two target photos per trial.');
+    }
     if (targets.isEmpty) {
       throw StateError('Not enough target photos to compose a ${_definition.id.name} tap trial.');
     }
@@ -86,10 +142,11 @@ class TapModeController implements ModeController {
         itemIndex == 0 ? targetPhoto : chosenDistractors[itemIndex - 1],
     ];
 
-    return Trial(
+    return TapTrial(
       target: targetPhoto,
       items: items,
       targetSlot: targetSlot,
+      targetSlots: [targetSlot],
       instruction: _instructionFor(targetPhoto, position.similarityTier),
     );
   }

@@ -63,19 +63,47 @@ InMemoryPhotoRepository _seedFourPhotos() {
   return repo;
 }
 
+/// Two targets plus three distractors: the smallest own-photo library that
+/// composes an extended LRFFC array-five tap trial.
+InMemoryPhotoRepository _seedFivePhotos() {
+  final repo = InMemoryPhotoRepository(seed: false);
+  for (final label in ['target_one', 'target_two']) {
+    repo.addPhoto(
+      childId: _childId,
+      module: _module,
+      localPath: '/fake/$label.jpg',
+      category: PhotoCategory.target,
+      label: label,
+    );
+  }
+  for (final label in ['distractor_1', 'distractor_2', 'distractor_3']) {
+    repo.addPhoto(
+      childId: _childId,
+      module: _module,
+      localPath: '/fake/$label.jpg',
+      category: PhotoCategory.distractor,
+      label: label,
+    );
+  }
+  return repo;
+}
+
 /// Seeds a child already sitting at the dial engine's ceiling (arraySize 4,
 /// lrffc tier) with the streak already one response short of clearing again
 /// — the setup every mastery-at-ceiling test below shares, so only the
 /// screen's own tap has to fire the criterion.
-Future<AdvancementTracker> _primeAtCeiling(InMemoryChildRepository childRepo) async {
+Future<AdvancementTracker> _primeAtCeiling(
+    InMemoryChildRepository childRepo) async {
   final persistence = LadderPersistence(childRepo);
   await persistence.save(
     childId: _childId,
     module: _module,
     mode: ResponseMode.tap,
-    position: const LadderPosition(arraySize: 4, similarityTier: SimilarityTier.lrffc),
+    position: const LadderPosition(
+        arraySize: 4, similarityTier: SimilarityTier.lrffc),
   );
-  final tracker = AdvancementTracker(dialEngine: const TwoDialEngine(), persistence: persistence);
+  final tracker = AdvancementTracker(
+      dialEngine: const TwoDialEngine(), persistence: persistence);
   for (var i = 0; i < requiredStreakForAdvancement - 1; i++) {
     await tracker.recordResponse(
       childId: _childId,
@@ -104,7 +132,8 @@ Widget _buildDirectApp({
     routes: [
       GoRoute(
         path: '/tap',
-        builder: (context, state) => const TapModeScreen(childId: _childId, module: _module),
+        builder: (context, state) =>
+            const TapModeScreen(childId: _childId, module: _module),
       ),
     ],
   );
@@ -113,19 +142,23 @@ Widget _buildDirectApp({
     overrides: [
       childRepositoryProvider.overrideWithValue(childRepo),
       photoRepositoryProvider.overrideWithValue(photoRepo),
-      if (tracker != null) advancementTrackerProvider.overrideWithValue(tracker),
+      if (tracker != null)
+        advancementTrackerProvider.overrideWithValue(tracker),
     ],
     child: MaterialApp.router(routerConfig: router),
   );
 }
 
 void main() {
-  testWidgets('renders the instruction and one tappable answer target per item', (tester) async {
+  testWidgets('renders the instruction and one tappable answer target per item',
+      (tester) async {
     final childRepo = InMemoryChildRepository(seed: false);
-    await childRepo.createChild(name: 'Arif', availableModes: {ResponseMode.tap});
+    await childRepo
+        .createChild(name: 'Arif', availableModes: {ResponseMode.tap});
     final photoRepo = _seedPhotos();
 
-    await tester.pumpWidget(_buildDirectApp(childRepo: childRepo, photoRepo: photoRepo));
+    await tester.pumpWidget(
+        _buildDirectApp(childRepo: childRepo, photoRepo: photoRepo));
     await tester.pumpAndSettle();
 
     // LadderPosition.start() → arraySize 2 → exactly the two seeded photos,
@@ -138,12 +171,15 @@ void main() {
 
   testWidgets(
       'the target and distractor answer cards render with identical chrome — no colour or '
-      'shape gives the answer away before the child looks at the photo', (tester) async {
+      'shape gives the answer away before the child looks at the photo',
+      (tester) async {
     final childRepo = InMemoryChildRepository(seed: false);
-    await childRepo.createChild(name: 'Arif', availableModes: {ResponseMode.tap});
+    await childRepo
+        .createChild(name: 'Arif', availableModes: {ResponseMode.tap});
     final photoRepo = _seedPhotos();
 
-    await tester.pumpWidget(_buildDirectApp(childRepo: childRepo, photoRepo: photoRepo));
+    await tester.pumpWidget(
+        _buildDirectApp(childRepo: childRepo, photoRepo: photoRepo));
     await tester.pumpAndSettle();
 
     // AnswerTarget is `match_mode_screen.dart`'s zone widget — it paints
@@ -157,9 +193,12 @@ void main() {
     Color? fillColorFor(String label) {
       final container = tester
           .widgetList<Container>(
-            find.descendant(of: _answerItemFor(label), matching: find.byType(Container)),
+            find.descendant(
+                of: _answerItemFor(label), matching: find.byType(Container)),
           )
-          .firstWhere((c) => c.decoration is BoxDecoration && (c.decoration! as BoxDecoration).color != null);
+          .firstWhere((c) =>
+              c.decoration is BoxDecoration &&
+              (c.decoration! as BoxDecoration).color != null);
       return ((container.decoration!) as BoxDecoration).color;
     }
 
@@ -172,17 +211,20 @@ void main() {
     expect(targetFill, equals(distractorFill));
   });
 
-  testWidgets('tapping the target item advances the streak and composes a new trial',
+  testWidgets(
+      'tapping the target item advances the streak and composes a new trial',
       (tester) async {
     final childRepo = InMemoryChildRepository(seed: false);
-    await childRepo.createChild(name: 'Arif', availableModes: {ResponseMode.tap});
+    await childRepo
+        .createChild(name: 'Arif', availableModes: {ResponseMode.tap});
     final photoRepo = _seedPhotos();
     final tracker = AdvancementTracker(
       dialEngine: const TwoDialEngine(),
       persistence: LadderPersistence(childRepo),
     );
 
-    await tester.pumpWidget(_buildDirectApp(childRepo: childRepo, photoRepo: photoRepo, tracker: tracker));
+    await tester.pumpWidget(_buildDirectApp(
+        childRepo: childRepo, photoRepo: photoRepo, tracker: tracker));
     await tester.pumpAndSettle();
 
     await tester.tap(_answerItemFor('target_item'));
@@ -190,43 +232,126 @@ void main() {
     await tester.pump(const Duration(milliseconds: 600));
     await tester.pumpAndSettle();
 
-    expect(tracker.streakFor(childId: _childId, module: _module, mode: ResponseMode.tap), 1);
+    expect(
+        tracker.streakFor(
+            childId: _childId, module: _module, mode: ResponseMode.tap),
+        1);
     // A new trial composed from the same two-photo library — still exactly
     // one tappable target per item.
     expect(find.byType(PhotoImage), findsNWidgets(2));
   });
 
-  testWidgets('tapping the distractor item does not advance the streak', (tester) async {
+  testWidgets('tapping the distractor item does not advance the streak',
+      (tester) async {
     final childRepo = InMemoryChildRepository(seed: false);
-    await childRepo.createChild(name: 'Arif', availableModes: {ResponseMode.tap});
+    await childRepo
+        .createChild(name: 'Arif', availableModes: {ResponseMode.tap});
     final photoRepo = _seedPhotos();
     final tracker = AdvancementTracker(
       dialEngine: const TwoDialEngine(),
       persistence: LadderPersistence(childRepo),
     );
 
-    await tester.pumpWidget(_buildDirectApp(childRepo: childRepo, photoRepo: photoRepo, tracker: tracker));
+    await tester.pumpWidget(_buildDirectApp(
+        childRepo: childRepo, photoRepo: photoRepo, tracker: tracker));
     await tester.pumpAndSettle();
 
     await tester.tap(_answerItemFor('distractor_item'));
     await tester.pump(const Duration(milliseconds: 600));
     await tester.pumpAndSettle();
 
-    expect(tracker.streakFor(childId: _childId, module: _module, mode: ResponseMode.tap), 0);
+    expect(
+        tracker.streakFor(
+            childId: _childId, module: _module, mode: ResponseMode.tap),
+        0);
+  });
+
+  testWidgets(
+      'an array-five trial keeps a found target while a wrong tap awaits the second target',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final childRepo = InMemoryChildRepository(seed: false);
+    await childRepo
+        .createChild(name: 'Arif', availableModes: {ResponseMode.tap});
+    final persistence = LadderPersistence(childRepo);
+    await persistence.save(
+      childId: _childId,
+      module: _module,
+      mode: ResponseMode.tap,
+      position: const LadderPosition(
+          arraySize: 5, similarityTier: SimilarityTier.lrffc),
+    );
+    final tracker = AdvancementTracker(
+        dialEngine: const TwoDialEngine(), persistence: persistence);
+
+    await tester.pumpWidget(
+      _buildDirectApp(
+          childRepo: childRepo, photoRepo: _seedFivePhotos(), tracker: tracker),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(PhotoImage), findsNWidgets(5));
+
+    await tester.tap(_answerItemFor('target_one'));
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pumpAndSettle();
+
+    // A correct target is a persistent, non-interactive success, not a
+    // completed trial. Removing the `found` branch would make this tappable.
+    expect(tester.widget<InkWell>(_answerItemFor('target_one')).onTap, isNull);
+    expect(
+        tracker.streakFor(
+            childId: _childId, module: _module, mode: ResponseMode.tap),
+        1);
+
+    await tester.tap(_answerItemFor('distractor_1'));
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pumpAndSettle();
+
+    // The miss is recorded, but it cannot replace the two-target trial or
+    // unlock the first target before the remaining target is found.
+    expect(
+        tracker.streakFor(
+            childId: _childId, module: _module, mode: ResponseMode.tap),
+        0);
+    expect(tester.widget<InkWell>(_answerItemFor('target_one')).onTap, isNull);
+    expect(
+        tester.widget<InkWell>(_answerItemFor('target_two')).onTap, isNotNull);
+
+    await tester.tap(_answerItemFor('target_two'));
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pumpAndSettle();
+
+    // Only the second target resolves the trial: a newly composed board has
+    // no carried-over locked target, and that final response is recorded too.
+    expect(
+        tester.widget<InkWell>(_answerItemFor('target_one')).onTap, isNotNull);
+    expect(
+        tester.widget<InkWell>(_answerItemFor('target_two')).onTap, isNotNull);
+    expect(
+        tracker.streakFor(
+            childId: _childId, module: _module, mode: ResponseMode.tap),
+        1);
   });
 
   testWidgets('the exit dot pops the session route', (tester) async {
     final childRepo = InMemoryChildRepository(seed: false);
-    await childRepo.createChild(name: 'Arif', availableModes: {ResponseMode.tap});
+    await childRepo
+        .createChild(name: 'Arif', availableModes: {ResponseMode.tap});
     final photoRepo = _seedPhotos();
 
     final router = GoRouter(
       initialLocation: Routes.guardianFor(_childId),
       routes: [
-        GoRoute(path: Routes.guardianHome, builder: (context, state) => const Text('guardian-home')),
+        GoRoute(
+            path: Routes.guardianHome,
+            builder: (context, state) => const Text('guardian-home')),
         GoRoute(
           path: '/tap',
-          builder: (context, state) => const TapModeScreen(childId: _childId, module: _module),
+          builder: (context, state) =>
+              const TapModeScreen(childId: _childId, module: _module),
         ),
       ],
     );
@@ -260,21 +385,25 @@ void main() {
     // test surface — a pre-existing layout limit unrelated to this feature,
     // just never exercised by a prior test (every other test here stays at
     // arraySize 2).
-    await tester.binding.setSurfaceSize(const Size(800, 1000));
+    await tester.binding.setSurfaceSize(const Size(800, 1200));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     final childRepo = InMemoryChildRepository(seed: false);
-    await childRepo.createChild(name: 'Arif', availableModes: {ResponseMode.tap});
+    await childRepo
+        .createChild(name: 'Arif', availableModes: {ResponseMode.tap});
     final photoRepo = _seedFourPhotos();
     final tracker = await _primeAtCeiling(childRepo);
 
     final router = GoRouter(
       initialLocation: Routes.guardianFor(_childId),
       routes: [
-        GoRoute(path: Routes.guardianHome, builder: (context, state) => const Text('guardian-home')),
+        GoRoute(
+            path: Routes.guardianHome,
+            builder: (context, state) => const Text('guardian-home')),
         GoRoute(
           path: '/tap',
-          builder: (context, state) => const TapModeScreen(childId: _childId, module: _module),
+          builder: (context, state) =>
+              const TapModeScreen(childId: _childId, module: _module),
         ),
       ],
     );
@@ -309,20 +438,26 @@ void main() {
     expect(find.text('guardian-home'), findsOneWidget);
   });
 
-  testWidgets('Lanjutkan dismisses the prompt and keeps the session going at the ceiling',
+  testWidgets(
+      'Lanjutkan dismisses the prompt and keeps the session going at the ceiling',
       (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 1000));
+    await tester.binding.setSurfaceSize(const Size(800, 1200));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     final childRepo = InMemoryChildRepository(seed: false);
-    await childRepo.createChild(name: 'Arif', availableModes: {ResponseMode.tap});
-    final photoRepo = _seedFourPhotos();
+    await childRepo
+        .createChild(name: 'Arif', availableModes: {ResponseMode.tap});
+    final photoRepo = _seedFivePhotos();
     final tracker = await _primeAtCeiling(childRepo);
 
-    await tester.pumpWidget(_buildDirectApp(childRepo: childRepo, photoRepo: photoRepo, tracker: tracker));
+    await tester.pumpWidget(_buildDirectApp(
+        childRepo: childRepo, photoRepo: photoRepo, tracker: tracker));
     await tester.pumpAndSettle();
 
-    await tester.tap(_answerItemFor('target_item'));
+    final firstTarget = find.text('target_one').evaluate().isNotEmpty
+        ? 'target_one'
+        : 'target_two';
+    await tester.tap(_answerItemFor(firstTarget));
     await tester.pump(const Duration(milliseconds: 600));
     await tester.pumpAndSettle();
 
@@ -335,7 +470,7 @@ void main() {
     // never a new screen.
     expect(find.text('Lanjutkan'), findsNothing);
     expect(find.byType(TapModeScreen), findsOneWidget);
-    expect(find.byType(PhotoImage), findsNWidgets(4));
+    expect(find.byType(PhotoImage), findsNWidgets(5));
   });
 
   testWidgets(
@@ -343,7 +478,8 @@ void main() {
       'child never reaches the dial engine\'s ceiling, and Selesai ends the session',
       (tester) async {
     final childRepo = InMemoryChildRepository(seed: false);
-    await childRepo.createChild(name: 'Arif', availableModes: {ResponseMode.tap});
+    await childRepo
+        .createChild(name: 'Arif', availableModes: {ResponseMode.tap});
     // Only two photos → arraySize can never grow past 2, and every tap below
     // is on the distractor, so the streak never clears and the position
     // never moves off `LadderPosition.start()` — nowhere near the ceiling,
@@ -354,10 +490,13 @@ void main() {
     final router = GoRouter(
       initialLocation: Routes.guardianFor(_childId),
       routes: [
-        GoRoute(path: Routes.guardianHome, builder: (context, state) => const Text('guardian-home')),
+        GoRoute(
+            path: Routes.guardianHome,
+            builder: (context, state) => const Text('guardian-home')),
         GoRoute(
           path: '/tap',
-          builder: (context, state) => const TapModeScreen(childId: _childId, module: _module),
+          builder: (context, state) =>
+              const TapModeScreen(childId: _childId, module: _module),
         ),
       ],
     );

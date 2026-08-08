@@ -64,15 +64,23 @@ void main() {
       expect(engine.advance(atFour), expected);
     });
 
-    test('lrffc + array 4 + advance is a fixed point — no step 11', () {
-      const top = LadderPosition(
+    test('lrffc extends from array 4 through 6, then holds', () {
+      const celebratedMilestone = LadderPosition(
         arraySize: 4,
         similarityTier: SimilarityTier.lrffc,
       );
+      const atFive = LadderPosition(
+        arraySize: 5,
+        similarityTier: SimilarityTier.lrffc,
+      );
+      const extendedCeiling = LadderPosition(
+        arraySize: 6,
+        similarityTier: SimilarityTier.lrffc,
+      );
 
-      expect(engine.advance(top), top);
-      // Idempotent under repeated advancement, too.
-      expect(engine.advance(engine.advance(top)), top);
+      expect(engine.advance(celebratedMilestone), atFive);
+      expect(engine.advance(atFive), extendedCeiling);
+      expect(engine.advance(extendedCeiling), extendedCeiling);
     });
   });
 
@@ -128,6 +136,16 @@ void main() {
 
       expect(engine.distractorCountFor(position, ResponseMode.tap), 2);
       expect(engine.distractorCountFor(position, ResponseMode.match), 2);
+    });
+
+    test('lrffc tap at extended array sizes has two targets', () {
+      const position = LadderPosition(
+        arraySize: 5,
+        similarityTier: SimilarityTier.lrffc,
+      );
+
+      expect(engine.targetCountFor(position, ResponseMode.tap), 2);
+      expect(engine.distractorCountFor(position, ResponseMode.tap), 3);
     });
   });
 }

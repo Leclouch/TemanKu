@@ -53,6 +53,34 @@ void main() {
     });
   });
 
+  group('GuardedPositionRotator multi-target rotation', () {
+    test('first target honours the guard and all target slots are distinct', () {
+      for (var i = 0; i < 20; i++) {
+        final targetSlots = rotator.nextTargetSlots(
+          arraySize: 4,
+          count: 2,
+          recentPrimaryTargetSlots: const [1, 1],
+        );
+
+        expect(targetSlots, hasLength(2));
+        expect(targetSlots.first, isNot(1));
+        expect(targetSlots.toSet(), hasLength(2));
+      }
+    });
+
+    test('places each target item at its requested slot and keeps every item once', () {
+      final slots = rotator.shuffleSlotsMulti(
+        arraySize: 5,
+        targetSlots: const [3, 1],
+      );
+
+      expect(slots[3], 0);
+      expect(slots[1], 1);
+      expect(slots.toSet(), {0, 1, 2, 3, 4});
+      expect(slots, hasLength(5));
+    });
+  });
+
   group('GuardedPositionRotator.nextTargetZone', () {
     test('honours the same ≤2-consecutive-repeat guard as target slots', () {
       for (var i = 0; i < 20; i++) {

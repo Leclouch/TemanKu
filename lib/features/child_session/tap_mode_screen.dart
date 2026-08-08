@@ -51,9 +51,10 @@ class TapModeScreen extends ConsumerStatefulWidget {
 class _TapModeScreenState extends ConsumerState<TapModeScreen> {
   late final TapModeController _controller;
 
-  Trial? _trial;
+  TapTrial? _trial;
   List<Photo> _photos = [];
   List<int> _recentTargetSlots = [];
+  final Set<int> _foundTargets = {};
   ({int slot, bool correct})? _flash;
 
   /// True between a tap resolving and the next trial replacing it — guards
@@ -122,7 +123,8 @@ class _TapModeScreenState extends ConsumerState<TapModeScreen> {
     _position = position;
     // Null only if the child was deleted mid-session (rare); the badge
     // simply stays off rather than this screen failing to load over it.
-    final child = await ref.read(childRepositoryProvider).getChild(widget.childId);
+    final child =
+        await ref.read(childRepositoryProvider).getChild(widget.childId);
     _levelIndicatorEnabled = child?.levelIndicatorEnabled ?? false;
     _session = await ref.read(sessionRepositoryProvider).startSession(
           childId: widget.childId,
@@ -178,8 +180,10 @@ class _TapModeScreenState extends ConsumerState<TapModeScreen> {
         _trial = trial;
         _position = position;
         _flash = null;
+        _foundTargets.clear();
         _resolving = false;
-        _recentTargetSlots = [trial.targetSlot, ..._recentTargetSlots].take(2).toList();
+        _recentTargetSlots =
+            [trial.targetSlot, ..._recentTargetSlots].take(2).toList();
         _loading = false;
         _setupError = null;
       });
@@ -189,7 +193,8 @@ class _TapModeScreenState extends ConsumerState<TapModeScreen> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _setupError = 'Foto belum cukup untuk main. Minta wali menambah foto dulu.';
+        _setupError =
+            'Foto belum cukup untuk main. Minta wali menambah foto dulu.';
       });
     }
   }
@@ -197,6 +202,11 @@ class _TapModeScreenState extends ConsumerState<TapModeScreen> {
   Future<void> _handleTap(int itemSlot) async {
     final trial = _trial;
     if (trial == null || _resolving) return;
+
+    if (trial.targetSlots.length > 1) {
+      await _handleMultiTargetTap(trial, itemSlot);
+      return;
+    }
 
     final outcome = _controller.judge(trial, itemSlot);
     final correct = outcome == TrialOutcome.correct;
@@ -262,6 +272,74 @@ class _TapModeScreenState extends ConsumerState<TapModeScreen> {
     await _composeTrial(result.position);
   }
 
+  Future<void> _handleMultiTargetTap(TapTrial trial, int itemSlot) async {
+    if (_foundTargets.contains(itemSlot)) return;
+
+    final outcome = _controller.judge(trial, itemSlot);
+    final correct = outcome == TrialOutcome.correct;
+    final allTargetsFound =
+        correct && _foundTargets.length + 1 == trial.targetSlots.length;
+
+    setState(() {
+      _resolving = true;
+      _flash = (slot: itemSlot, correct: correct);
+      if (correct) _foundTargets.add(itemSlot);
+      _mascotPose = correct ? MascotPose.celebrating : MascotPose.standing;
+      _mascotReactionTick++;
+    });
+    unawaited(
+      correct
+          ? ref.read(soundServiceProvider).playCorrect()
+          : ref.read(soundServiceProvider).playTryAgain(),
+    );
+
+    // Every tap still contributes an independent response to the ladder,
+    // but only finding every target can resolve this extended trial.
+    final result = await ref.read(advancementTrackerProvider).recordResponse(
+          childId: widget.childId,
+          module: widget.module,
+          mode: ResponseMode.tap,
+          correct: correct,
+          hintShown: trial.hintShown,
+        );
+
+    await Future.delayed(TkMotion.feedbackHold);
+    if (!mounted) return;
+    if (_mascotPose == MascotPose.celebrating) {
+      setState(() => _mascotPose = MascotPose.standing);
+    }
+
+    if (!allTargetsFound) {
+      setState(() {
+        _flash = null;
+        _resolving = false;
+      });
+      return;
+    }
+
+    if (result.masteredAtCeiling) {
+      _reachedCeiling = true;
+      _trialsSinceLastPause = 0;
+      final shouldContinue = await showMasteryClosurePrompt(context, ref);
+      if (!mounted) return;
+      if (!shouldContinue) {
+        unawaited(_endSession(SessionOutcome.completed));
+        context.pop();
+        return;
+      }
+    } else if (++_trialsSinceLastPause >= naturalPauseTrialInterval) {
+      _trialsSinceLastPause = 0;
+      final shouldContinue = await showNaturalPausePrompt(context, ref);
+      if (!mounted) return;
+      if (!shouldContinue) {
+        unawaited(_endSession(SessionOutcome.completed));
+        context.pop();
+        return;
+      }
+    }
+    await _composeTrial(result.position);
+  }
+
   @override
   Widget build(BuildContext context) {
     // TkChildScreen carries the child theme, the always-visible quiet exit,
@@ -272,11 +350,16 @@ class _TapModeScreenState extends ConsumerState<TapModeScreen> {
         // A quiet exit after the ceiling was already reached this session
         // (guardian chose "Lanjutkan" earlier, then stopped later) still
         // counts as completed — see [_reachedCeiling]'s own doc comment.
-        unawaited(_endSession(_reachedCeiling ? SessionOutcome.completed : SessionOutcome.endedEarly));
+        unawaited(_endSession(_reachedCeiling
+            ? SessionOutcome.completed
+            : SessionOutcome.endedEarly));
         context.pop();
       },
-      corner: Mascot(size: 128, pose: _mascotPose, reactionTick: _mascotReactionTick),
-      debugBadge: _levelIndicatorEnabled ? LevelIndicatorBadge(position: _position) : null,
+      corner: Mascot(
+          size: 128, pose: _mascotPose, reactionTick: _mascotReactionTick),
+      debugBadge: _levelIndicatorEnabled
+          ? LevelIndicatorBadge(position: _position)
+          : null,
       child: Builder(builder: _buildBody),
     );
   }
@@ -300,6 +383,7 @@ class _TapModeScreenState extends ConsumerState<TapModeScreen> {
         const SizedBox(height: TkSpace.xxl),
         _AnswerRow(
           trial: trial,
+          foundTargets: _foundTargets,
           flash: _flash,
           onTap: _handleTap,
         ),
@@ -311,11 +395,13 @@ class _TapModeScreenState extends ConsumerState<TapModeScreen> {
 class _AnswerRow extends StatelessWidget {
   const _AnswerRow({
     required this.trial,
+    required this.foundTargets,
     required this.flash,
     required this.onTap,
   });
 
-  final Trial trial;
+  final TapTrial trial;
+  final Set<int> foundTargets;
   final ({int slot, bool correct})? flash;
   final void Function(int itemSlot) onTap;
 
@@ -329,7 +415,9 @@ class _AnswerRow extends StatelessWidget {
         for (var slot = 0; slot < trial.items.length; slot++)
           _AnswerItem(
             photo: trial.items[slot],
-            flashCorrect: flash != null && flash!.slot == slot ? flash!.correct : null,
+            found: foundTargets.contains(slot),
+            flashCorrect:
+                flash != null && flash!.slot == slot ? flash!.correct : null,
             onTap: () => onTap(slot),
           ),
       ],
@@ -353,11 +441,13 @@ class _AnswerRow extends StatelessWidget {
 class _AnswerItem extends StatelessWidget {
   const _AnswerItem({
     required this.photo,
+    required this.found,
     required this.flashCorrect,
     required this.onTap,
   });
 
   final Photo photo;
+  final bool found;
   final bool? flashCorrect;
   final VoidCallback onTap;
 
@@ -368,14 +458,17 @@ class _AnswerItem extends StatelessWidget {
     // Identical visual weight for both outcomes (§10/§12: no alarm colour, no
     // de-emphasised failure state) — only which existing feedback token is
     // used differs, never the treatment around it.
-    final flashColor =
-        flashCorrect == null ? Colors.transparent : (flashCorrect! ? colors.successFeedback : colors.neutralFeedback);
+    final flashColor = found
+        ? colors.successFeedback
+        : flashCorrect == null
+            ? Colors.transparent
+            : (flashCorrect! ? colors.successFeedback : colors.neutralFeedback);
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
         borderRadius: TkRadius.lg,
-        onTap: onTap,
+        onTap: found ? null : onTap,
         child: AnimatedContainer(
           duration: context.motion(TkMotion.base),
           padding: const EdgeInsets.all(TkSpace.xxs),
@@ -393,7 +486,8 @@ class _AnswerItem extends StatelessWidget {
               decoration: BoxDecoration(
                 color: colors.surface,
                 borderRadius: TkRadius.md,
-                border: Border.all(color: colors.border, width: TkStroke.hairline),
+                border:
+                    Border.all(color: colors.border, width: TkStroke.hairline),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -405,7 +499,8 @@ class _AnswerItem extends StatelessWidget {
                   SizedBox(
                     width: 96,
                     height: 96,
-                    child: PhotoImage(localPath: photo.localPath, borderRadius: TkRadius.xs),
+                    child: PhotoImage(
+                        localPath: photo.localPath, borderRadius: TkRadius.xs),
                   ),
                   if (photo.label != null) ...[
                     const SizedBox(height: TkSpace.xxs),
