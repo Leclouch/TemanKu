@@ -91,6 +91,7 @@ class GuardianHomePlaceholder extends ConsumerWidget {
                   _IntakeEntryPoint(childId: childId),
                   _UploadEntryPoint(childId: childId),
                   _SettingsEntryPoint(childId: childId),
+                  _LevelSettingsEntryPoint(childId: childId),
                   _ModuleListCard(childId: childId),
                 ],
               ),
@@ -192,6 +193,31 @@ class _SettingsEntryPoint extends StatelessWidget {
 /// The "Unggah foto" card's real entry point (§5.1/§5.2) — picks a module,
 /// then hands off to [PhotoUploadScreen]. Quality gate, variety nudge, and the
 /// no-network-call guarantee all live there; this card is just the doorway.
+//
+/// The guardian-only ladder override. The detailed screen derives its choices
+/// from the engine so this card is only a doorway, not a second level model.
+class _LevelSettingsEntryPoint extends StatelessWidget {
+  const _LevelSettingsEntryPoint({required this.childId});
+
+  final String childId;
+
+  @override
+  Widget build(BuildContext context) {
+    return TkCard(
+      title: 'Tahap latihan',
+      subtitle:
+          'Pilih tahap yang tersedia untuk setiap modul dan cara menjawab.',
+      leading: const _CardIcon(icon: LucideIcons.slidersHorizontal),
+      child: TkButton.secondary(
+        label: 'Atur tahap',
+        icon: LucideIcons.arrowRight,
+        onPressed: () => context.push(Routes.levelSettingsFor(childId)),
+      ),
+    );
+  }
+}
+
+/// The "Unggah foto" card's real entry point.
 class _UploadEntryPoint extends StatelessWidget {
   const _UploadEntryPoint({required this.childId});
 
@@ -221,7 +247,8 @@ class _UploadEntryPoint extends StatelessWidget {
               for (final module in ModuleId.values)
                 TkButton.secondary(
                   label: _displayNameFor(module),
-                  onPressed: () => context.push(Routes.photoUploadFor(childId, module)),
+                  onPressed: () =>
+                      context.push(Routes.photoUploadFor(childId, module)),
                 ),
             ],
           ),
@@ -240,7 +267,8 @@ class _UploadEntryPoint extends StatelessWidget {
                 TkButton.quiet(
                   label: _displayNameFor(module),
                   icon: LucideIcons.images,
-                  onPressed: () => context.push(Routes.photoLibraryFor(childId, module)),
+                  onPressed: () =>
+                      context.push(Routes.photoLibraryFor(childId, module)),
                 ),
             ],
           ),
@@ -334,7 +362,8 @@ class _ActiveModuleTile extends StatelessWidget {
       icon: icon,
       name: _displayNameFor(module),
       description: description,
-      trailing: Icon(LucideIcons.arrowRight, size: 16, color: context.colors.textMuted),
+      trailing: Icon(LucideIcons.arrowRight,
+          size: 16, color: context.colors.textMuted),
       onTap: () => context.push(Routes.photoUploadFor(childId, module)),
     );
   }
@@ -423,7 +452,8 @@ class _ModuleTileShell extends StatelessWidget {
             color: muted ? c.neutralWash : c.primaryAccentWash,
             borderRadius: TkRadius.sm,
           ),
-          child: Icon(icon, size: 18, color: muted ? c.textMuted : c.primaryAccent),
+          child: Icon(icon,
+              size: 18, color: muted ? c.textMuted : c.primaryAccent),
         ),
         const SizedBox(width: TkSpace.sm),
         Expanded(
@@ -432,10 +462,12 @@ class _ModuleTileShell extends StatelessWidget {
             children: [
               Text(
                 name,
-                style: context.type.bodySm.copyWith(color: c.text, fontWeight: FontWeight.w700),
+                style: context.type.bodySm
+                    .copyWith(color: c.text, fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 2),
-              Text(description, style: context.type.caption.copyWith(color: c.textMuted)),
+              Text(description,
+                  style: context.type.caption.copyWith(color: c.textMuted)),
             ],
           ),
         ),
@@ -445,7 +477,8 @@ class _ModuleTileShell extends StatelessWidget {
     );
 
     final content = ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: TemanKuMetrics.minTouchTarget),
+      constraints:
+          const BoxConstraints(minHeight: TemanKuMetrics.minTouchTarget),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: TkSpace.xs),
         child: Align(
@@ -530,7 +563,8 @@ class _SessionRecapCard extends ConsumerWidget {
     final sessions = ref.watch(sessionRepositoryProvider);
     return TkCard(
       title: 'Ringkasan sesi',
-      leading: const _CardIcon(icon: LucideIcons.notebookPen, accent: _CardIconAccent.info),
+      leading: const _CardIcon(
+          icon: LucideIcons.notebookPen, accent: _CardIconAccent.info),
       child: FutureBuilder<List<SessionSummary>>(
         future: sessions.getSessionHistory(childId, limit: 1),
         builder: (context, snapshot) {
@@ -589,7 +623,8 @@ class _FullDataCard extends ConsumerWidget {
           collapsedIconColor: colors.text,
           title: Text(
             'Data lengkap',
-            style: context.type.display.copyWith(color: colors.text, fontSize: 18),
+            style:
+                context.type.display.copyWith(color: colors.text, fontSize: 18),
           ),
           subtitle: Text(
             'Jumlah percobaan mentah dan tanggal — bukan skor.',
@@ -611,7 +646,8 @@ class _FullDataCard extends ConsumerWidget {
                 if (stats.isEmpty && data.hintEntries == null) {
                   return Align(
                     alignment: Alignment.centerLeft,
-                    child: Text('Belum ada data.', style: context.type.body.copyWith(color: colors.text)),
+                    child: Text('Belum ada data.',
+                        style: context.type.body.copyWith(color: colors.text)),
                   );
                 }
 
@@ -632,7 +668,8 @@ class _FullDataCard extends ConsumerWidget {
                       Divider(color: colors.neutralFeedback, height: 24),
                       Text(
                         'Log sesi',
-                        style: context.type.display.copyWith(color: colors.text, fontSize: 16),
+                        style: context.type.display
+                            .copyWith(color: colors.text, fontSize: 16),
                       ),
                       const SizedBox(height: 6),
                       // Deliberately monospace for the whole row here, not
@@ -646,7 +683,8 @@ class _FullDataCard extends ConsumerWidget {
                           child: Text(
                             '${_formatFullDate(s.endedAt)} · ${_displayNameFor(s.module)} · '
                             '${modeLabel(s.mode)} · ${s.duration.inMinutes} menit',
-                            style: context.type.mono.copyWith(color: colors.text),
+                            style:
+                                context.type.mono.copyWith(color: colors.text),
                           ),
                         ),
                     ],
@@ -676,8 +714,10 @@ class _FullDataCardData {
   final List<PronunciationHintLogEntry>? hintEntries;
 }
 
-Future<_FullDataCardData> _loadFullDataCard(WidgetRef ref, String childId) async {
-  final stats = await loadFullData(ref.read(sessionRepositoryProvider), childId);
+Future<_FullDataCardData> _loadFullDataCard(
+    WidgetRef ref, String childId) async {
+  final stats =
+      await loadFullData(ref.read(sessionRepositoryProvider), childId);
   final hintEntries = await loadPronunciationHintFullData(
     ref.read(childRepositoryProvider),
     ref.read(pronunciationHintLogRepositoryProvider),
@@ -703,7 +743,8 @@ class _PronunciationHintDataSection extends StatelessWidget {
       children: [
         Text(
           'Saran pengucapan',
-          style: context.type.display.copyWith(color: colors.text, fontSize: 16),
+          style:
+              context.type.display.copyWith(color: colors.text, fontSize: 16),
         ),
         const SizedBox(height: 4),
         // Constraint 4: labelled experimental/advisory every time it's
@@ -712,11 +753,13 @@ class _PronunciationHintDataSection extends StatelessWidget {
         // assessment.
         Text(
           'Data eksperimental dari fitur saran pengucapan — bukan penilaian resmi.',
-          style: context.type.body.copyWith(color: colors.neutralFeedback, fontStyle: FontStyle.italic),
+          style: context.type.body.copyWith(
+              color: colors.neutralFeedback, fontStyle: FontStyle.italic),
         ),
         const SizedBox(height: 6),
         if (entries.isEmpty)
-          Text('Belum ada data pengucapan.', style: context.type.body.copyWith(color: colors.text))
+          Text('Belum ada data pengucapan.',
+              style: context.type.body.copyWith(color: colors.text))
         else
           // Same deliberate raw-table monospace treatment as "Log sesi"
           // above — target word, IPA, and phoneme distance are technical
@@ -730,7 +773,8 @@ class _PronunciationHintDataSection extends StatelessWidget {
                 '${_formatFullDate(entry.recordedAt)} · ${_displayNameFor(entry.module)} · '
                 'target "${entry.targetWord}" · IPA: ${entry.predictedIpa ?? '—'} · '
                 'jarak fonem: ${entry.distance ?? '—'}',
-                style: context.type.mono.copyWith(color: colors.text, fontSize: 12),
+                style: context.type.mono
+                    .copyWith(color: colors.text, fontSize: 12),
               ),
             ),
       ],
@@ -764,15 +808,18 @@ class _ModuleModeDataBlock extends StatelessWidget {
       children: [
         Text(
           '${definition.displayName} · ${modeLabel(stats.mode)}',
-          style: context.type.body.copyWith(color: colors.text, fontWeight: FontWeight.w700),
+          style: context.type.body
+              .copyWith(color: colors.text, fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 4),
-        Text('Total percobaan: ${stats.totalTrials}', style: context.type.body.copyWith(color: colors.text)),
+        Text('Total percobaan: ${stats.totalTrials}',
+            style: context.type.body.copyWith(color: colors.text)),
         Text(
           '${stats.independentCorrect} dari ${stats.independentAttempts} percobaan tanpa bantuan berhasil',
           style: context.type.body.copyWith(color: colors.text),
         ),
-        Text(positionText, style: context.type.body.copyWith(color: colors.text)),
+        Text(positionText,
+            style: context.type.body.copyWith(color: colors.text)),
         if (stats.tierMilestones.isNotEmpty) ...[
           const SizedBox(height: 4),
           Text(
@@ -784,7 +831,8 @@ class _ModuleModeDataBlock extends StatelessWidget {
               padding: const EdgeInsets.only(left: 8, top: 2),
               child: Text(
                 '${_formatFullDate(milestone.reachedAt)} — ${tierLabel(milestone.tier)}',
-                style: context.type.mono.copyWith(color: colors.neutralFeedback, fontSize: 12),
+                style: context.type.mono
+                    .copyWith(color: colors.neutralFeedback, fontSize: 12),
               ),
             ),
         ],
@@ -808,7 +856,8 @@ class _MilestoneTimeline extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return TkCard(
       title: 'Perjalanan',
-      leading: const _CardIcon(icon: LucideIcons.route, accent: _CardIconAccent.info),
+      leading: const _CardIcon(
+          icon: LucideIcons.route, accent: _CardIconAccent.info),
       child: FutureBuilder<List<_MilestoneEntry>>(
         future: _loadMilestones(ref, childId),
         builder: (context, snapshot) {
@@ -831,7 +880,9 @@ class _MilestoneTimeline extends ConsumerWidget {
                   // a scanning aid, never the only carrier of the meaning.
                   trailing: TkBadge(
                     label: entry.mastered ? 'menguasai' : 'berlatih',
-                    tone: entry.mastered ? TkBadgeTone.success : TkBadgeTone.neutral,
+                    tone: entry.mastered
+                        ? TkBadgeTone.success
+                        : TkBadgeTone.neutral,
                   ),
                 ),
             ],
@@ -841,7 +892,8 @@ class _MilestoneTimeline extends ConsumerWidget {
     );
   }
 
-  Future<List<_MilestoneEntry>> _loadMilestones(WidgetRef ref, String childId) async {
+  Future<List<_MilestoneEntry>> _loadMilestones(
+      WidgetRef ref, String childId) async {
     final child = await ref.read(childRepositoryProvider).getChild(childId);
     if (child == null) return const [];
 
@@ -852,7 +904,8 @@ class _MilestoneTimeline extends ConsumerWidget {
     for (final module in ModuleId.values) {
       final definition = _definitionFor(module);
       for (final mode in child.availableModes) {
-        final position = await persistence.load(childId: childId, module: module, mode: mode);
+        final position = await persistence.load(
+            childId: childId, module: module, mode: mode);
         final tierCopy = definition.similarityTierCopy[position.similarityTier];
         final mastered = dialEngine.isAtCeiling(position, mode);
         entries.add(
@@ -884,14 +937,16 @@ class _SessionHistory extends ConsumerWidget {
     final sessions = ref.watch(sessionRepositoryProvider);
     return TkCard(
       title: 'Riwayat',
-      leading: const _CardIcon(icon: LucideIcons.history, accent: _CardIconAccent.info),
+      leading: const _CardIcon(
+          icon: LucideIcons.history, accent: _CardIconAccent.info),
       child: FutureBuilder<List<SessionSummary>>(
         future: sessions.getSessionHistory(childId),
         builder: (context, snapshot) {
           if (!snapshot.hasData) return const TkLoading(compact: true);
           final history = snapshot.data!;
           if (history.isEmpty) {
-            return const TkEmptyState(message: 'Belum ada sesi.', compact: true);
+            return const TkEmptyState(
+                message: 'Belum ada sesi.', compact: true);
           }
           return Column(
             children: [

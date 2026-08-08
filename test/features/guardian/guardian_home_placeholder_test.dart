@@ -74,6 +74,13 @@ Future<void> _recordSession(
   );
 }
 
+Future<void> _expandFullData(WidgetTester tester) async {
+  final fullData = find.text('Data lengkap');
+  await tester.ensureVisible(fullData);
+  await tester.tap(fullData);
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets(
       '"Data lengkap" starts collapsed — the narrative recap sentence is what renders '
@@ -189,8 +196,7 @@ void main() {
     await tester.pumpWidget(_buildApp(child.id, childRepo, sessionRepo));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Data lengkap'));
-    await tester.pumpAndSettle();
+    await _expandFullData(tester);
 
     expect(find.textContaining('Total percobaan: 3'), findsOneWidget);
     expect(find.textContaining('2 dari 3 percobaan tanpa bantuan berhasil'), findsOneWidget);
@@ -216,8 +222,7 @@ void main() {
     await tester.pumpWidget(_buildApp(child.id, childRepo, sessionRepo));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Data lengkap'));
-    await tester.pumpAndSettle();
+    await _expandFullData(tester);
 
     expect(find.text('Saran pengucapan'), findsNothing);
     expect(find.textContaining('Data eksperimental dari fitur saran pengucapan'), findsNothing);
@@ -255,8 +260,7 @@ void main() {
     await tester.pumpWidget(_buildApp(child.id, childRepo, sessionRepo, hintLogRepo: hintLogRepo));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Data lengkap'));
-    await tester.pumpAndSettle();
+    await _expandFullData(tester);
 
     expect(find.text('Saran pengucapan'), findsOneWidget);
     expect(

@@ -23,6 +23,7 @@ import 'package:temanku/features/child_session/speak_mode_screen.dart';
 import 'package:temanku/features/child_session/tap_mode_screen.dart';
 import 'package:temanku/features/guardian/child_settings_screen.dart';
 import 'package:temanku/features/guardian/guardian_home_placeholder.dart';
+import 'package:temanku/features/guardian/level_settings_screen.dart';
 import 'package:temanku/features/guardian/photo_library_screen.dart';
 import 'package:temanku/features/guardian/photo_upload_screen.dart';
 import 'package:temanku/features/onboarding/intake_screen.dart';
@@ -36,6 +37,7 @@ abstract final class Routes {
   static const speakSession = '/session/:childId/speak/:module';
   static const guardianHome = '/guardian/:childId';
   static const childSettings = '/guardian/:childId/settings';
+  static const levelSettings = '/guardian/:childId/level';
   static const photoUpload = '/guardian/:childId/upload/:module';
   static const photoLibrary = '/guardian/:childId/photos/:module';
   static const intake = '/intake/:childId';
@@ -48,7 +50,9 @@ abstract final class Routes {
   static String speakSessionFor(String childId, ModuleId module) =>
       '/session/$childId/speak/${module.name}';
   static String guardianFor(String childId) => '/guardian/$childId';
-  static String childSettingsFor(String childId) => '/guardian/$childId/settings';
+  static String childSettingsFor(String childId) =>
+      '/guardian/$childId/settings';
+  static String levelSettingsFor(String childId) => '/guardian/$childId/level';
   static String photoUploadFor(String childId, ModuleId module) =>
       '/guardian/$childId/upload/${module.name}';
   static String photoLibraryFor(String childId, ModuleId module) =>
@@ -99,6 +103,12 @@ final appRouter = GoRouter(
     GoRoute(
       path: Routes.childSettings,
       builder: (context, state) => ChildSettingsScreen(
+        childId: state.pathParameters['childId']!,
+      ),
+    ),
+    GoRoute(
+      path: Routes.levelSettings,
+      builder: (context, state) => LevelSettingsScreen(
         childId: state.pathParameters['childId']!,
       ),
     ),
