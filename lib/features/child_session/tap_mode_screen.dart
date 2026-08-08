@@ -21,14 +21,13 @@ import 'package:temanku/content/keluarga/keluarga_module.dart';
 import 'package:temanku/content/makanan/makanan_module.dart';
 import 'package:temanku/content/module_definition.dart';
 import 'package:temanku/core/constants/domain_enums.dart';
+import 'package:temanku/core/design/design.dart';
 import 'package:temanku/core/service_locator.dart';
-import 'package:temanku/core/theme/temanku_theme.dart';
 import 'package:temanku/data/models/child.dart';
 import 'package:temanku/data/models/photo.dart';
 import 'package:temanku/engine/modes/mode_controller.dart';
 import 'package:temanku/engine/modes/tap/tap_mode_controller.dart';
 import 'package:temanku/widgets/answer_target.dart';
-import 'package:temanku/widgets/exit_dot.dart';
 import 'package:temanku/widgets/mastery_closure_prompt.dart';
 import 'package:temanku/widgets/photo_image.dart';
 
@@ -152,7 +151,7 @@ class _TapModeScreenState extends ConsumerState<TapModeScreen> {
 
     // Let the feedback read before the next trial replaces it — same beat as
     // match mode's settle animation.
-    await Future.delayed(const Duration(milliseconds: 500));
+    await Future.delayed(TkMotion.feedbackHold);
     if (!mounted) return;
 
     if (result.masteredAtCeiling) {
@@ -168,74 +167,39 @@ class _TapModeScreenState extends ConsumerState<TapModeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Child surface runs a different theme temperature, applied locally —
-    // same rule as `match_mode_screen.dart`.
-    return Theme(
-      data: TemanKuTheme.child,
-      child: Builder(
-        builder: (context) {
-          final colors = context.colors;
-          return Scaffold(
-            backgroundColor: colors.background,
-            body: SafeArea(
-              child: Stack(
-                children: [
-                  Center(child: _buildBody(context)),
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: ExitDot(onExit: () => context.pop()),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
+    // TkChildScreen carries the child theme, the always-visible quiet exit,
+    // the bounded content column and the fixed centred task position — the
+    // four things every child screen used to re-declare for itself.
+    return TkChildScreen(
+      onExit: () => context.pop(),
+      child: Builder(builder: _buildBody),
     );
   }
 
   Widget _buildBody(BuildContext context) {
     final colors = context.colors;
 
-    if (_loading) return const CircularProgressIndicator();
+    if (_loading) return const TkLoading();
 
-    if (_setupError != null) {
-      return Padding(
-        padding: const EdgeInsets.all(24),
-        child: Text(
-          _setupError!,
-          textAlign: TextAlign.center,
-          style: context.type.body.copyWith(color: colors.text),
-        ),
-      );
-    }
+    if (_setupError != null) return TkChildNotice(message: _setupError!);
 
     final trial = _trial!;
-    return ConstrainedBox(
-      // Bounded, not fixed — phone-first, tablet free (§11), same rule as
-      // every other child session screen.
-      constraints: const BoxConstraints(maxWidth: 480),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              trial.instruction,
-              textAlign: TextAlign.center,
-              style: context.type.display.copyWith(color: colors.text),
-            ),
-            const SizedBox(height: 24),
-            _AnswerRow(
-              trial: trial,
-              definition: _definitionFor(widget.module),
-              flash: _flash,
-              onTap: _handleTap,
-            ),
-          ],
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          trial.instruction,
+          textAlign: TextAlign.center,
+          style: context.type.displayLg.copyWith(color: colors.text),
         ),
-      ),
+        const SizedBox(height: TkSpace.xxl),
+        _AnswerRow(
+          trial: trial,
+          definition: _definitionFor(widget.module),
+          flash: _flash,
+          onTap: _handleTap,
+        ),
+      ],
     );
   }
 }
@@ -256,8 +220,8 @@ class _AnswerRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Wrap(
-      spacing: 12,
-      runSpacing: 12,
+      spacing: TkSpace.sm,
+      runSpacing: TkSpace.sm,
       alignment: WrapAlignment.center,
       children: [
         for (var slot = 0; slot < trial.items.length; slot++)
@@ -302,14 +266,17 @@ class _AnswerItem extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: TkRadius.lg,
         onTap: onTap,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.all(4),
+          duration: context.motion(TkMotion.base),
+          // The gap between this ring and the AnswerTarget fill inside it is
+          // load-bearing, not spacing: without it a yellow "try again" ring
+          // around a pale category fill has no edge to read against.
+          padding: const EdgeInsets.all(TkSpace.xxs),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: flashColor, width: 4),
+            borderRadius: TkRadius.lg,
+            border: Border.all(color: flashColor, width: TkStroke.feedback),
           ),
           // AnswerTarget always paints colour AND CategoryShape together
           // (widgets/answer_target.dart) — never colour alone.
@@ -321,11 +288,11 @@ class _AnswerItem extends StatelessWidget {
           child: AnswerTarget(
             style: style,
             label: photo.label,
-            labelFontSize: 22,
+            labelStyle: context.type.titleLg,
             child: SizedBox(
               width: 96,
               height: 96,
-              child: PhotoImage(localPath: photo.localPath, borderRadius: BorderRadius.circular(8)),
+              child: PhotoImage(localPath: photo.localPath, borderRadius: TkRadius.xs),
             ),
           ),
         ),

@@ -55,12 +55,15 @@ import 'package:temanku/engine/ladder_persistence.dart';
 import 'package:temanku/engine/rotation/position_rotator.dart';
 import 'package:temanku/photo_pipeline/classifier_service.dart';
 import 'package:temanku/photo_pipeline/quality_gate/quality_gate.dart';
-import 'package:temanku/photo_pipeline/tflite_classifier.dart';
+import 'package:temanku/photo_pipeline/classifier_impl.dart';
 import 'package:temanku/photo_pipeline/stranger_library/stranger_library.dart';
 import 'package:temanku/speech/no_hint_service.dart';
 import 'package:temanku/speech/pronunciation_hint_service.dart';
 import 'package:temanku/speech/remote_articulation_hint_service.dart';
 import 'package:temanku/speech/silero_vad_service.dart';
+import 'package:temanku/speech/tts/cached_word_audio_service.dart';
+import 'package:temanku/speech/tts/edge_tts_source.dart';
+import 'package:temanku/speech/tts/word_audio_service.dart';
 import 'package:temanku/speech/vad_service.dart';
 
 // ---------------------------------------------------------------------------
@@ -129,13 +132,14 @@ final vadServiceProvider = Provider<VadService>((ref) {
 /// Tripwire unchanged from the original plan: not reliably usable → revert
 /// this line to `ManualLabelClassifier()`. Decide once, move on.
 final classifierServiceProvider = Provider<ClassifierService>((ref) {
-  final service = TfliteClassifier();
+  final service = createClassifier();
   unawaited(service.initialize());
   ref.onDispose(service.dispose);
   return service;
 });
 
-final qualityGateProvider = Provider<QualityGate>((ref) => const ClassicalCvQualityGate());
+final qualityGateProvider =
+    Provider<QualityGate>((ref) => const ClassicalCvQualityGate());
 
 /// One instance for the whole app, same reasoning as [vadServiceProvider] —
 /// sound effects are guardian-controlled global state (mute/volume), not
@@ -159,11 +163,38 @@ final pronunciationHintServiceProvider =
   return enabled ? RemoteArticulationHintService() : const NoHintService();
 });
 
+/// Speaks the target word aloud — the model half of speak mode's echoic
+/// trial (`speech/tts/word_audio_service.dart`).
+///
+/// Keyed on the same `Child.pronunciationHintEnabled` flag as
+/// [pronunciationHintServiceProvider], for one reason: both talk to the same
+/// external host (`speech/articulation_backend.dart`), and the consent copy
+/// in `features/guardian/child_settings_screen.dart` covers that host. Adding
+/// a second network destination under a flag the guardian agreed to for a
+/// *different* purpose would make that consent inaccurate.
+///
+/// Note the asymmetry with scoring, which is real and intended: TTS sends
+/// only the word — a string the guardian typed themselves — and receives
+/// audio. **No microphone data is involved.** Scoring is the direction that
+/// carries a recording of the child, and it is the one the consent copy
+/// leads with.
+final wordAudioServiceProvider =
+    Provider.family<WordAudioService, bool>((ref, enabled) {
+  if (!enabled) return const NoWordAudioService();
+  final service = CachedWordAudioService(
+    source: EdgeTtsSource(),
+    soundService: ref.watch(soundServiceProvider),
+  );
+  ref.onDispose(service.dispose);
+  return service;
+});
+
 /// Keluarga's bundled distractor faces (§5.3) — never network-fetched, never
 /// mixed into `photoRepositoryProvider`. Only Keluarga consumes this today
 /// (`ModuleDefinition.usesBundledDistractors`), but the provider itself is
 /// module-agnostic, same as every other entry here.
-final strangerLibraryProvider = Provider<StrangerLibrary>((ref) => BundledStrangerLibrary());
+final strangerLibraryProvider =
+    Provider<StrangerLibrary>((ref) => BundledStrangerLibrary());
 
 // ---------------------------------------------------------------------------
 // Engine (ADR-1) — plain Dart, provider-wrapped, unit-testable without widgets

@@ -41,7 +41,7 @@ import 'package:temanku/content/module_definition.dart';
 import 'package:temanku/core/constants/domain_enums.dart';
 import 'package:temanku/core/routing/app_router.dart';
 import 'package:temanku/core/service_locator.dart';
-import 'package:temanku/core/theme/temanku_theme.dart';
+import 'package:temanku/core/design/design.dart';
 import 'package:temanku/data/models/photo.dart';
 import 'package:temanku/photo_pipeline/quality_gate/quality_gate.dart';
 import 'package:temanku/widgets/edit_label_dialog.dart';
@@ -229,72 +229,80 @@ class _PhotoUploadScreenState extends ConsumerState<PhotoUploadScreen> {
     final definition = _definitionFor(widget.module);
     final busy = _stage == _UploadStage.checking;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Tambah foto · ${definition.displayName}'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.photo_library_outlined),
-            tooltip: 'Lihat semua foto',
-            onPressed: () => context.push(Routes.photoLibraryFor(widget.childId, widget.module)),
+    // The preview stage replaces the whole body and owns its own bottom bar,
+    // so it opts out of TkScreen's padding and scrolling rather than
+    // nesting two scroll views.
+    if (_stage == _UploadStage.previewing) {
+      return TkScreen(
+        title: 'Tambah foto · ${definition.displayName}',
+        maxWidth: TemanKuMetrics.contentMaxWidth,
+        scrollable: false,
+        padding: EdgeInsets.zero,
+        child: _PhotoPreview(
+          imagePath: _pendingImagePath!,
+          definition: definition,
+          needsPersonDetails: _needsPersonDetails,
+          nameController: _nameController,
+          category: _category,
+          ageGroup: _ageGroup,
+          onConfirm: () => _confirmSave(),
+          onRetake: _retake,
+        ),
+      );
+    }
+
+    return TkScreen(
+      title: 'Tambah foto · ${definition.displayName}',
+      maxWidth: TemanKuMetrics.contentMaxWidth,
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.photo_library_outlined),
+          tooltip: 'Lihat semua foto',
+          onPressed: () => context.push(Routes.photoLibraryFor(widget.childId, widget.module)),
+        ),
+      ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_nudgeVisible)
+            _SavedNudge(
+              onDismiss: _dismissNudge,
+              label: definition.usesClassifier ? _lastSaved?.label : null,
+              onEditLabel: definition.usesClassifier ? _editLabel : null,
+            ),
+          if (_needsPersonDetails)
+            _PersonDetailsFields(
+              nameController: _nameController,
+              ageGroup: _ageGroup,
+              enabled: !busy,
+              onAgeGroupChanged: (g) => setState(() => _ageGroup = g),
+              onNameChanged: () => setState(() {}), // refresh _canCapture
+            )
+          else
+            _CategoryPicker(
+              definition: definition,
+              value: _category,
+              onChanged: busy ? null : (c) => setState(() => _category = c),
+            ),
+          const SizedBox(height: TkSpace.lg),
+          if (_stage == _UploadStage.retake) ...[
+            _RetakeBanner(message: _retakePrompt!),
+            const SizedBox(height: TkSpace.md),
+          ],
+          _CaptureButtons(
+            busy: busy,
+            retrying: _stage == _UploadStage.retake,
+            enabled: _canCapture,
+            onCamera: () => _capture(ImageSource.camera),
+            onGallery: () => _capture(ImageSource.gallery),
+          ),
+          const SizedBox(height: TkSpace.xl),
+          _CountEncouragement(
+            childId: widget.childId,
+            module: widget.module,
+            category: _needsPersonDetails ? PhotoCategory.target : _category,
           ),
         ],
-      ),
-      body: SafeArea(
-        child: _stage == _UploadStage.previewing
-            ? _PhotoPreview(
-                imagePath: _pendingImagePath!,
-                definition: definition,
-                needsPersonDetails: _needsPersonDetails,
-                nameController: _nameController,
-                category: _category,
-                ageGroup: _ageGroup,
-                onConfirm: () => _confirmSave(),
-                onRetake: _retake,
-              )
-            : ListView(
-                padding: const EdgeInsets.all(24),
-                children: [
-                  if (_nudgeVisible)
-                    _SavedNudge(
-                      onDismiss: _dismissNudge,
-                      label: definition.usesClassifier ? _lastSaved?.label : null,
-                      onEditLabel: definition.usesClassifier ? _editLabel : null,
-                    ),
-                  if (_needsPersonDetails)
-                    _PersonDetailsFields(
-                      nameController: _nameController,
-                      ageGroup: _ageGroup,
-                      enabled: !busy,
-                      onAgeGroupChanged: (g) => setState(() => _ageGroup = g),
-                      onNameChanged: () => setState(() {}), // refresh _canCapture
-                    )
-                  else
-                    _CategoryPicker(
-                      definition: definition,
-                      value: _category,
-                      onChanged: busy ? null : (c) => setState(() => _category = c),
-                    ),
-                  const SizedBox(height: 20),
-                  if (_stage == _UploadStage.retake) ...[
-                    _RetakeBanner(message: _retakePrompt!),
-                    const SizedBox(height: 16),
-                  ],
-                  _CaptureButtons(
-                    busy: busy,
-                    retrying: _stage == _UploadStage.retake,
-                    enabled: _canCapture,
-                    onCamera: () => _capture(ImageSource.camera),
-                    onGallery: () => _capture(ImageSource.gallery),
-                  ),
-                  const SizedBox(height: 24),
-                  _CountEncouragement(
-                    childId: widget.childId,
-                    module: widget.module,
-                    category: _needsPersonDetails ? PhotoCategory.target : _category,
-                  ),
-                ],
-              ),
       ),
     );
   }
@@ -333,17 +341,18 @@ class _PhotoPreview extends StatelessWidget {
       children: [
         Expanded(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(TkSpace.gutter),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 480, maxHeight: 420),
+                  constraints: const BoxConstraints(maxHeight: 420),
                   child: AspectRatio(
                     aspectRatio: 1,
-                    child: PhotoImage(localPath: imagePath, borderRadius: BorderRadius.circular(16)),
+                    child: PhotoImage(localPath: imagePath, borderRadius: TkRadius.md),
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: TkSpace.lg),
                 if (needsPersonDetails)
                   // Already collected above, before capture — this is a
                   // recap, not a new input.
@@ -353,25 +362,27 @@ class _PhotoPreview extends StatelessWidget {
                       if (ageGroup != null) _ageGroupLabel[ageGroup]!,
                     ].join(' · '),
                     textAlign: TextAlign.center,
-                    style: context.type.display.copyWith(color: colors.text, fontSize: 22),
+                    style: context.type.titleLg.copyWith(color: colors.text),
                   )
                 else ...[
-                  Text(
-                    category == PhotoCategory.target
-                        ? definition.targetCategoryLabel
-                        : definition.distractorCategoryLabel,
-                    style: context.type.body.copyWith(color: colors.neutralFeedback),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TkBadge(
+                      label: category == PhotoCategory.target
+                          ? definition.targetCategoryLabel
+                          : definition.distractorCategoryLabel,
+                      tone: TkBadgeTone.accent,
+                    ),
                   ),
-                  const SizedBox(height: 16),
-                  Text('Nama benda ini:', style: context.type.body.copyWith(color: colors.text)),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: TkSpace.md),
+                  Text('Nama benda ini:', style: context.type.title.copyWith(color: colors.text)),
+                  const SizedBox(height: TkSpace.xs),
+                  // No local `border:` override — the outline, radius and
+                  // focus treatment all come from inputDecorationTheme.
                   TextField(
                     controller: nameController,
                     autofocus: true,
-                    decoration: const InputDecoration(
-                      hintText: 'apa nama benda ini?',
-                      border: OutlineInputBorder(),
-                    ),
+                    decoration: const InputDecoration(hintText: 'apa nama benda ini?'),
                   ),
                 ],
               ],
@@ -382,32 +393,30 @@ class _PhotoPreview extends StatelessWidget {
         // reaches PhotoRepository (see _PhotoUploadScreenState._confirmSave).
         DecoratedBox(
           decoration: BoxDecoration(
-            color: colors.background,
-            border: Border(top: BorderSide(color: colors.neutralFeedback)),
+            color: colors.surface,
+            border: Border(
+              top: BorderSide(color: colors.border, width: TkStroke.regular),
+            ),
           ),
           child: SafeArea(
             top: false,
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(TkSpace.md),
               child: Row(
                 children: [
                   Expanded(
-                    child: SizedBox(
-                      height: TemanKuMetrics.minTouchTarget,
-                      child: OutlinedButton(
-                        onPressed: onRetake,
-                        child: const Text('Ambil ulang'),
-                      ),
+                    child: TkButton.secondary(
+                      label: 'Ambil ulang',
+                      onPressed: onRetake,
+                      expand: true,
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: TkSpace.sm),
                   Expanded(
-                    child: SizedBox(
-                      height: TemanKuMetrics.minTouchTarget,
-                      child: FilledButton(
-                        onPressed: onConfirm,
-                        child: const Text('Pakai foto ini'),
-                      ),
+                    child: TkButton(
+                      label: 'Pakai foto ini',
+                      onPressed: onConfirm,
+                      expand: true,
                     ),
                   ),
                 ],
@@ -437,8 +446,8 @@ class _CategoryPicker extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Foto ini termasuk:', style: context.type.body.copyWith(color: colors.text)),
-        const SizedBox(height: 8),
+        Text('Foto ini termasuk:', style: context.type.title.copyWith(color: colors.text)),
+        const SizedBox(height: TkSpace.xs),
         SegmentedButton<PhotoCategory>(
           segments: [
             ButtonSegment(
@@ -494,20 +503,17 @@ class _PersonDetailsFields extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Nama / hubungan keluarga:', style: context.type.body.copyWith(color: colors.text)),
-        const SizedBox(height: 8),
+        Text('Nama / hubungan keluarga:', style: context.type.title.copyWith(color: colors.text)),
+        const SizedBox(height: TkSpace.xs),
         TextField(
           controller: nameController,
           enabled: enabled,
           onChanged: (_) => onNameChanged(),
-          decoration: const InputDecoration(
-            hintText: 'mis. Ibu, Kakak Sari',
-            border: OutlineInputBorder(),
-          ),
+          decoration: const InputDecoration(hintText: 'mis. Ibu, Kakak Sari'),
         ),
-        const SizedBox(height: 20),
-        Text('Kelompok usia:', style: context.type.body.copyWith(color: colors.text)),
-        const SizedBox(height: 8),
+        const SizedBox(height: TkSpace.lg),
+        Text('Kelompok usia:', style: context.type.title.copyWith(color: colors.text)),
+        const SizedBox(height: TkSpace.xs),
         SegmentedButton<AgeGroup>(
           segments: [
             for (final group in AgeGroup.values)
@@ -543,30 +549,34 @@ class _CaptureButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (busy) {
-      return const Center(child: CircularProgressIndicator());
-    }
+    if (busy) return const TkLoading(label: 'Memeriksa foto…');
+
     return Column(
       children: [
-        SizedBox(
-          width: double.infinity,
-          height: TemanKuMetrics.minTouchTarget,
-          child: FilledButton.icon(
-            onPressed: enabled ? onCamera : null,
-            icon: const Icon(Icons.photo_camera_outlined),
-            label: Text(retrying ? 'Coba lagi dengan kamera' : 'Ambil foto'),
-          ),
+        TkButton(
+          label: retrying ? 'Coba lagi dengan kamera' : 'Ambil foto',
+          icon: Icons.photo_camera_outlined,
+          onPressed: enabled ? onCamera : null,
+          expand: true,
         ),
-        const SizedBox(height: 12),
-        SizedBox(
-          width: double.infinity,
-          height: TemanKuMetrics.minTouchTarget,
-          child: OutlinedButton.icon(
-            onPressed: enabled ? onGallery : null,
-            icon: const Icon(Icons.photo_library_outlined),
-            label: Text(retrying ? 'Pilih foto lain dari galeri' : 'Pilih dari galeri'),
-          ),
+        const SizedBox(height: TkSpace.sm),
+        TkButton.secondary(
+          label: retrying ? 'Pilih foto lain dari galeri' : 'Pilih dari galeri',
+          icon: Icons.photo_library_outlined,
+          onPressed: enabled ? onGallery : null,
+          expand: true,
         ),
+        if (!enabled) ...[
+          const SizedBox(height: TkSpace.xs),
+          // A disabled primary action always says why. A dead control with
+          // no explanation is the "freeze" trigger the ADHD guidance calls
+          // out — the guardian cannot tell broken from not-yet-ready.
+          Text(
+            'Isi nama dan kelompok usia dulu.',
+            textAlign: TextAlign.center,
+            style: context.type.caption.copyWith(color: context.colors.textMuted),
+          ),
+        ],
       ],
     );
   }
@@ -581,20 +591,23 @@ class _RetakeBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     // Deliberately the same neutral weight as the child screen's "try again"
-    // state (§12) — no alarm colour, even on a guardian surface.
+    // state (§12) — no alarm colour, even on a guardian surface. This is the
+    // one place on the guardian side that legitimately paints in
+    // neutralFeedback: it *is* a "try again", just addressed to the adult.
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(TkSpace.md),
       decoration: BoxDecoration(
-        color: colors.neutralFeedback.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: colors.neutralFeedback),
+        color: colors.neutralWash,
+        borderRadius: TkRadius.md,
+        border: Border.all(color: colors.neutralFeedback, width: TkStroke.regular),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.refresh, color: colors.text),
-          const SizedBox(width: 12),
+          Icon(Icons.refresh, color: colors.text, size: 20),
+          const SizedBox(width: TkSpace.sm),
           Expanded(
-            child: Text(message, style: context.type.body.copyWith(color: colors.text)),
+            child: Text(message, style: context.type.bodySm.copyWith(color: colors.text)),
           ),
         ],
       ),
@@ -621,13 +634,14 @@ class _SavedNudge extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     return Container(
-      margin: const EdgeInsets.only(bottom: 20),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: TkSpace.lg),
+      padding: const EdgeInsets.all(TkSpace.md),
       decoration: BoxDecoration(
-        // secondaryAccent is the guardian-surface-only token (core/theme/) —
-        // deliberately not the child screen's palette.
-        color: colors.secondaryAccent.withValues(alpha: 0.18),
-        borderRadius: BorderRadius.circular(12),
+        // The success wash, because this is genuinely a "that worked" moment
+        // — the one place on the guardian surface that earns it.
+        color: colors.successWash,
+        borderRadius: TkRadius.md,
+        border: Border.all(color: colors.successFeedback, width: TkStroke.regular),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -635,12 +649,12 @@ class _SavedNudge extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.check_circle, color: colors.successFeedback),
-              const SizedBox(width: 12),
+              Icon(Icons.check_circle, color: colors.text, size: 20),
+              const SizedBox(width: TkSpace.sm),
               Expanded(
                 child: Text(
                   'Bagus! Tambahkan satu lagi yang berbeda ya, biar makin lengkap.',
-                  style: context.type.body.copyWith(color: colors.text),
+                  style: context.type.bodySm.copyWith(color: colors.text),
                 ),
               ),
               IconButton(
@@ -657,9 +671,10 @@ class _SavedNudge extends StatelessWidget {
           ),
           if (onEditLabel != null)
             Padding(
-              padding: const EdgeInsets.only(left: 36),
+              padding: const EdgeInsets.only(left: TkSpace.xxl),
               child: InkWell(
                 onTap: onEditLabel,
+                borderRadius: TkRadius.xs,
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(minHeight: TemanKuMetrics.minTouchTarget),
                   child: Align(
@@ -668,8 +683,9 @@ class _SavedNudge extends StatelessWidget {
                       label != null
                           ? 'Tersimpan sebagai "$label" — bukan itu? Ketuk untuk ubah.'
                           : 'Wali tahu nama benda ini? Ketuk untuk kasih nama.',
-                      style: context.type.body.copyWith(
+                      style: context.type.bodySm.copyWith(
                         color: colors.text,
+                        fontWeight: FontWeight.w700,
                         decoration: TextDecoration.underline,
                       ),
                     ),
@@ -704,12 +720,41 @@ class _CountEncouragement extends ConsumerWidget {
       builder: (context, snapshot) {
         final count =
             snapshot.data?.where((p) => p.category == category).length ?? 0;
+        final met = count >= suggestedPhotosPerCategory;
         // Encouragement copy only (§5.4) — this never disables the capture
         // buttons above, regardless of the count.
-        return Text(
-          '$count dari $suggestedPhotosPerCategory disarankan untuk kategori ini.',
-          textAlign: TextAlign.center,
-          style: context.type.body.copyWith(color: colors.neutralFeedback),
+        //
+        // The dots are a soft nudge made visible, not a progress bar toward
+        // a gate: past the suggested count they simply stop filling, and no
+        // state anywhere reads them.
+        return Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                for (var i = 0; i < suggestedPhotosPerCategory; i++)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 3),
+                    child: Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: i < count ? colors.successFeedback : colors.border,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: TkSpace.xs),
+            Text(
+              met
+                  ? 'Sudah $count foto — cukup untuk kategori ini. Boleh tambah lagi kalau mau.'
+                  : '$count dari $suggestedPhotosPerCategory disarankan untuk kategori ini.',
+              textAlign: TextAlign.center,
+              style: context.type.caption.copyWith(color: colors.textMuted),
+            ),
+          ],
         );
       },
     );

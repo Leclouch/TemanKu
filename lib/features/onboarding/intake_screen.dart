@@ -22,7 +22,7 @@ import 'package:go_router/go_router.dart';
 import 'package:temanku/core/constants/domain_enums.dart';
 import 'package:temanku/core/routing/app_router.dart';
 import 'package:temanku/core/service_locator.dart';
-import 'package:temanku/core/theme/temanku_theme.dart';
+import 'package:temanku/core/design/design.dart';
 import 'package:temanku/data/models/child.dart';
 
 /// The three mode questions share the same answer shape and mapping (§8):
@@ -119,18 +119,45 @@ class _IntakeScreenState extends ConsumerState<IntakeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Intake')),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: _step == _questionCount
-              ? _ConfirmationStep(
-                  onDone: () => context.go(Routes.guardianFor(widget.childId)),
-                )
-              : _buildQuestionStep(context),
+    if (_step == _questionCount) {
+      return TkScreen(
+        title: 'Intake',
+        maxWidth: TemanKuMetrics.contentMaxWidth,
+        child: _ConfirmationStep(
+          onDone: () => context.go(Routes.guardianFor(widget.childId)),
         ),
+      );
+    }
+
+    return TkScreen(
+      title: 'Intake',
+      maxWidth: TemanKuMetrics.contentMaxWidth,
+      // The question list owns its own scrolling so the step indicator stays
+      // pinned at the top and the Back/Next pair stays pinned at the bottom —
+      // a stepped flow whose controls scroll away is a flow you can get lost in.
+      scrollable: false,
+      // Back is content-sized; Next takes whatever is left. A `Spacer` between
+      // two intrinsically-sized buttons overflows the moment the labels get
+      // long — which they do at the last step, in Indonesian, on a narrow phone.
+      bottomBar: Row(
+        children: [
+          if (_step > 0) ...[
+            TkButton.quiet(
+              label: 'Kembali',
+              onPressed: () => setState(() => _step -= 1),
+            ),
+            const SizedBox(width: TkSpace.xs),
+          ],
+          Expanded(
+            child: TkButton(
+              label: _step == _questionCount - 1 ? 'Selesai isi intake' : 'Lanjut',
+              onPressed: _canProceed ? _next : null,
+              expand: true,
+            ),
+          ),
+        ],
       ),
+      child: _buildQuestionStep(context),
     );
   }
 
@@ -139,34 +166,22 @@ class _IntakeScreenState extends ConsumerState<IntakeScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Pertanyaan ${_step + 1} dari $_questionCount',
-          style: context.type.mono.copyWith(color: colors.neutralFeedback),
-        ),
-        const SizedBox(height: 12),
+        // Replaces a bare "Pertanyaan 2 dari 4" line. Seeing how much is left
+        // is the single most effective mitigation for the form-freeze response
+        // — a stepped flow with no visible end reads as unbounded.
+        TkStepIndicator(step: _step, total: _questionCount),
+        const SizedBox(height: TkSpace.lg),
         Expanded(
           child: ListView(
             children: [
-              Text(_questionFor(_step), style: context.type.display.copyWith(color: colors.text)),
-              const SizedBox(height: 20),
+              Text(
+                _questionFor(_step),
+                style: context.type.titleLg.copyWith(color: colors.text),
+              ),
+              const SizedBox(height: TkSpace.lg),
               ..._optionsFor(_step),
             ],
           ),
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            if (_step > 0)
-              TextButton(
-                onPressed: () => setState(() => _step -= 1),
-                child: const Text('Kembali'),
-              ),
-            const Spacer(),
-            FilledButton(
-              onPressed: _canProceed ? _next : null,
-              child: Text(_step == _questionCount - 1 ? 'Selesai isi intake' : 'Lanjut'),
-            ),
-          ],
         ),
       ],
     );
@@ -183,7 +198,7 @@ class _IntakeScreenState extends ConsumerState<IntakeScreen> {
     if (step == 3) {
       return [
         for (final option in _diagnosisOptions)
-          _OptionTile<DiagnosisStatus>(
+          TkChoiceTile<DiagnosisStatus>(
             label: option.$2,
             value: option.$1,
             groupValue: _diagnosisAnswer,
@@ -210,7 +225,7 @@ class _IntakeScreenState extends ConsumerState<IntakeScreen> {
 
     return [
       for (final option in _modeOptions)
-        _OptionTile<_ModeAnswer>(
+        TkChoiceTile<_ModeAnswer>(
           label: option.$2,
           value: option.$1,
           groupValue: current,
@@ -220,57 +235,10 @@ class _IntakeScreenState extends ConsumerState<IntakeScreen> {
   }
 }
 
-/// A single-select option, styled as a big tappable card rather than a bare
-/// radio row — 44pt minimum touch target (§11), guardian-surface styling.
-class _OptionTile<T> extends StatelessWidget {
-  const _OptionTile({
-    required this.label,
-    required this.value,
-    required this.groupValue,
-    required this.onSelected,
-  });
-
-  final String label;
-  final T value;
-  final T? groupValue;
-  final ValueChanged<T> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final selected = value == groupValue;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: InkWell(
-        onTap: () => onSelected(value),
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          constraints: const BoxConstraints(minHeight: TemanKuMetrics.minTouchTarget),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            // secondaryAccent is the guardian-surface-only token (core/theme/).
-            color: selected ? colors.secondaryAccent.withValues(alpha: 0.18) : colors.background,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: selected ? colors.secondaryAccent : colors.neutralFeedback,
-              width: selected ? 2 : 1,
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-                color: selected ? colors.secondaryAccent : colors.neutralFeedback,
-              ),
-              const SizedBox(width: 12),
-              Expanded(child: Text(label, style: context.type.body.copyWith(color: colors.text))),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
+// `_OptionTile` used to live here — a big tappable card rather than a bare
+// radio row, which was the right instinct. It is now `TkChoiceTile` in
+// `core/design/components/tk_choice.dart`, unchanged in behaviour, so the
+// photo-upload and settings screens can stop inventing their own.
 
 class _ConfirmationStep extends StatelessWidget {
   const _ConfirmationStep({required this.onDone});
@@ -281,21 +249,31 @@ class _ConfirmationStep extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     return Center(
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.check_circle_outline, size: 48, color: colors.successFeedback),
-            const SizedBox(height: 16),
-            Text(
-              _confirmationCopy,
-              textAlign: TextAlign.center,
-              style: context.type.body.copyWith(color: colors.text),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              color: colors.successWash,
+              shape: BoxShape.circle,
             ),
-            const SizedBox(height: 24),
-            FilledButton(onPressed: onDone, child: const Text('Selesai')),
-          ],
-        ),
+            child: Icon(
+              Icons.check_rounded,
+              size: 40,
+              color: colors.text,
+            ),
+          ),
+          const SizedBox(height: TkSpace.lg),
+          Text(
+            _confirmationCopy,
+            textAlign: TextAlign.center,
+            style: context.type.titleLg.copyWith(color: colors.text),
+          ),
+          const SizedBox(height: TkSpace.xl),
+          TkButton(label: 'Selesai', onPressed: onDone, expand: true),
+        ],
       ),
     );
   }

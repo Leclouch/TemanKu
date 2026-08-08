@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:temanku/core/constants/domain_enums.dart';
 import 'package:temanku/core/service_locator.dart';
-import 'package:temanku/core/theme/temanku_theme.dart';
+import 'package:temanku/core/design/design.dart';
 import 'package:temanku/data/models/child.dart';
 import 'package:temanku/data/models/pronunciation_hint_log.dart';
 import 'package:temanku/data/models/session.dart';
@@ -183,8 +183,8 @@ void main() {
         childId: child.id,
         module: ModuleId.makanan,
         targetWord: 'pisang',
-        ipaTranscription: 'pisaŋ',
-        phonemeEditDistance: 0,
+        predictedIpa: 'pisaŋ',
+        distance: 0,
         recordedAt: DateTime(2026, 1, 2),
       ),
     );

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'package:temanku/core/theme/temanku_theme.dart';
+import 'package:temanku/core/design/design.dart';
 
 /// The quiet exit affordance — **shared component, jointly owned.**
 ///
@@ -45,7 +45,11 @@ class ExitDot extends StatelessWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 // Muted on purpose — reads as "not for you" to the child.
-                color: context.colors.neutralFeedback,
+                //
+                // Deliberately NOT a feedback token: this dot sits on screen
+                // during every trial, and painting it in the same colour the
+                // answer ring uses would make the exit read as an outcome.
+                color: context.colors.textMuted,
               ),
             ),
           ),

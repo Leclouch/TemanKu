@@ -21,12 +21,11 @@ import 'package:temanku/content/makanan/makanan_module.dart';
 import 'package:temanku/content/module_definition.dart';
 import 'package:temanku/core/constants/domain_enums.dart';
 import 'package:temanku/core/service_locator.dart';
-import 'package:temanku/core/theme/temanku_theme.dart';
+import 'package:temanku/core/design/design.dart';
 import 'package:temanku/data/models/child.dart';
 import 'package:temanku/data/models/photo.dart';
 import 'package:temanku/engine/modes/match/match_mode_controller.dart';
 import 'package:temanku/widgets/answer_target.dart';
-import 'package:temanku/widgets/exit_dot.dart';
 import 'package:temanku/widgets/mastery_closure_prompt.dart';
 import 'package:temanku/widgets/photo_image.dart';
 
@@ -143,7 +142,7 @@ class _MatchModeScreenState extends ConsumerState<MatchModeScreen> {
           : ref.read(soundServiceProvider).playTryAgain(),
     );
     unawaited(
-      Future.delayed(const Duration(milliseconds: 500), () {
+      Future.delayed(TkMotion.feedbackHold, () {
         if (mounted) setState(() => _zoneFlash = null);
       }),
     );
@@ -160,7 +159,7 @@ class _MatchModeScreenState extends ConsumerState<MatchModeScreen> {
 
     if (correct && _sortedSlots.length == trial.items.length) {
       // Let the settle animation read before the next trial replaces it.
-      await Future.delayed(const Duration(milliseconds: 400));
+      await Future.delayed(TkMotion.slow);
       if (!mounted) return;
 
       // Checked only here, at the trial-completion boundary — not on every
@@ -180,77 +179,38 @@ class _MatchModeScreenState extends ConsumerState<MatchModeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Child surface runs a different theme temperature, applied locally —
-    // same rule as `child_session_placeholder.dart`, both sourced from
-    // core/theme/.
-    return Theme(
-      data: TemanKuTheme.child,
-      child: Builder(
-        builder: (context) {
-          final colors = context.colors;
-          return Scaffold(
-            backgroundColor: colors.background,
-            body: SafeArea(
-              child: Stack(
-                children: [
-                  Center(child: _buildBody(context)),
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: ExitDot(onExit: () => context.pop()),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
+    return TkChildScreen(
+      onExit: () => context.pop(),
+      child: Builder(builder: _buildBody),
     );
   }
 
   Widget _buildBody(BuildContext context) {
     final colors = context.colors;
 
-    if (_loading) return const CircularProgressIndicator();
+    if (_loading) return const TkLoading();
 
-    if (_setupError != null) {
-      return Padding(
-        padding: const EdgeInsets.all(24),
-        child: Text(
-          _setupError!,
-          textAlign: TextAlign.center,
-          style: context.type.body.copyWith(color: colors.text),
-        ),
-      );
-    }
+    if (_setupError != null) return TkChildNotice(message: _setupError!);
 
     final trial = _trial!;
-    return ConstrainedBox(
-      // Bounded, not fixed — phone-first, tablet free (§11), same rule as
-      // the tap-mode placeholder.
-      constraints: const BoxConstraints(maxWidth: 480),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              trial.instruction,
-              textAlign: TextAlign.center,
-              style: context.type.display.copyWith(color: colors.text),
-            ),
-            const SizedBox(height: 24),
-            _ItemRow(trial: trial, sortedSlots: _sortedSlots),
-            const SizedBox(height: 32),
-            _ZoneRow(
-              trial: trial,
-              definition: _definitionFor(widget.module),
-              flash: _zoneFlash,
-              onDropped: _handleDrop,
-            ),
-          ],
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          trial.instruction,
+          textAlign: TextAlign.center,
+          style: context.type.displayLg.copyWith(color: colors.text),
         ),
-      ),
+        const SizedBox(height: TkSpace.xl),
+        _ItemRow(trial: trial, sortedSlots: _sortedSlots),
+        const SizedBox(height: TkSpace.xxl),
+        _ZoneRow(
+          trial: trial,
+          definition: _definitionFor(widget.module),
+          flash: _zoneFlash,
+          onDropped: _handleDrop,
+        ),
+      ],
     );
   }
 }
@@ -264,8 +224,8 @@ class _ItemRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Wrap(
-      spacing: 12,
-      runSpacing: 12,
+      spacing: TkSpace.sm,
+      runSpacing: TkSpace.sm,
       alignment: WrapAlignment.center,
       children: [
         for (var slot = 0; slot < trial.items.length; slot++)
@@ -302,12 +262,20 @@ class _ItemCard extends StatelessWidget {
       color: Colors.transparent,
       child: Container(
         width: 128,
-        constraints: const BoxConstraints(minHeight: TemanKuMetrics.minTouchTarget),
-        padding: const EdgeInsets.all(8),
+        constraints: const BoxConstraints(
+          minHeight: TemanKuMetrics.childTouchTarget,
+        ),
+        padding: const EdgeInsets.all(TkSpace.xs),
         decoration: BoxDecoration(
-          color: colors.background,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: colors.neutralFeedback, width: dragging ? 2 : 1),
+          color: colors.surface,
+          borderRadius: TkRadius.sm,
+          // Neutral chrome, never a feedback token: a card the child is
+          // *holding* must not be painted in a colour that means "correct"
+          // or "try again" before it has been dropped anywhere.
+          border: Border.all(
+            color: dragging ? colors.borderStrong : colors.border,
+            width: dragging ? TkStroke.regular : TkStroke.hairline,
+          ),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -317,16 +285,16 @@ class _ItemCard extends StatelessWidget {
               height: _matchImageSize,
               child: PhotoImage(
                 localPath: photo.localPath,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: TkRadius.xs,
               ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: TkSpace.xxs),
             Text(
               photo.label ?? '',
               textAlign: TextAlign.center,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: context.type.body.copyWith(color: colors.text),
+              style: context.type.title.copyWith(color: colors.text),
             ),
           ],
         ),
@@ -414,11 +382,13 @@ class _Zone extends StatelessWidget {
       onAcceptWithDetails: (details) => onAccept(details.data),
       builder: (context, candidateData, rejectedData) {
         return AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.all(4),
+          duration: context.motion(TkMotion.base),
+          // The gap inside this ring is load-bearing, not spacing — see the
+          // same construction in `tap_mode_screen.dart`.
+          padding: const EdgeInsets.all(TkSpace.xxs),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: flashColor, width: 4),
+            borderRadius: TkRadius.xl,
+            border: Border.all(color: flashColor, width: TkStroke.feedback),
           ),
           // AnswerTarget always paints colour AND CategoryShape together
           // (widgets/answer_target.dart) — never colour alone. Only the
@@ -435,7 +405,7 @@ class _Zone extends StatelessWidget {
                     height: _matchImageSize,
                     child: PhotoImage(
                       localPath: exemplar!.localPath,
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: TkRadius.xs,
                     ),
                   )
                 : null,

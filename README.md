@@ -15,7 +15,7 @@ authority on product decisions, the architecture doc (ADR-1…4) on structural o
 
 ```bash
 flutter pub get
-flutter test         # → 29 passing
+flutter test         # → 263 passing
 flutter analyze      # → clean
 flutter run          # → select-child screen
 ```
@@ -67,11 +67,88 @@ a signature there is a shared-folder change — raise it at the evening checkpoi
 contract. Every implementation must pass it unmodified. Don't weaken an assertion
 to make a new implementation pass — each case encodes a source-of-truth rule.
 
-**3. `lib/core/theme/` is a placeholder and looks like one.** Every colour is a
-mid-grey; type is wired to Flutter defaults with no font package installed. Real
-tokens come from Claude Design. Both `features/child_session/` and
-`features/guardian/` read through the same `ThemeExtension`, so the swap is one
-file — no feature file hardcodes a colour or a font size.
+**3. `lib/core/design/` is the design system, and nothing outside it invents a
+visual value.** Three layers, in reading order:
+
+- `tokens.dart` — the brand palette, semantic colour slots, type scale, spacing,
+  radii, stroke widths, motion. **The only file in the repo allowed a colour
+  literal.** Slots are named by role (`successFeedback`), never by hue.
+- `theme.dart` — binds those tokens onto Material's component themes, so a bare
+  `AppBar`, `FilledButton` or `AlertDialog` comes out on-brand without the call
+  site knowing anything. This is why the app needs no third-party UI library.
+- `components/` — the `Tk*` vocabulary: `TkScreen` / `TkChildScreen` shells,
+  `TkCard`, `TkSection`, `TkButton`, `TkChoiceTile`, `TkSwitchTile`,
+  `TkStepIndicator`, `TkLoading`, `TkEmptyState`, `TkBadge`, `TkDetailRow`.
+
+Import `core/design/design.dart` — one barrel for all three. Reach for a `Tk*`
+component first; a plain Material widget is fine as a fallback, because it is
+themed. What is never fine is a local `Container(decoration: BoxDecoration(...))`
+that reinvents card chrome — that is how the last round of drift started.
+
+`test/core/design/design_system_test.dart` guards the invariants: no type role
+clips at 360×640, every interactive component clears the 44pt floor, derived ink
+stays ≥4.5:1 across the palette, and no theme exposes a red error slot.
+
+Two substitutions to know about. **Robuck Rounded** and **ABC Diatype Rounded
+Plus** are commercial licences we do not hold; Nunito and Figtree stand in, and
+each family name lives in a single `const` in `tokens.dart` so adopting the real
+faces is a one-line change per family. Display leading is 0.95/1.00 rather than
+the specimen's literal 0.80 — Nunito's extenders clip below ~0.90, which the
+clipping guard catches.
+
+---
+
+## Speak mode and the external backend
+
+Speak mode is an **echoic** exercise: the app speaks the word, the child
+repeats it, an adult judges. Two of those three steps talk to a FastAPI
+service (`main.py`, wav2vec2 + Edge TTS) declared in
+`lib/speech/articulation_backend.dart` — **the only outbound network
+destination in the app**, and gated entirely behind
+`Child.pronunciationHintEnabled`.
+
+| Direction | Endpoint | What crosses the wire |
+|---|---|---|
+| Model the word | `GET /tts` | the word as text → MP3 back. **No microphone data.** |
+| Score the echo | `POST /score` | a clip of **the child's voice** → `{predicted_ipa, distance}` |
+
+Four things to know before touching any of it:
+
+**1. The guardian still judges.** §6 is unchanged. The score *highlights* one
+of the ✅/↻/— buttons and prints the phonemes it heard; the guardian's tap is
+the only thing that reaches `AdvancementTracker`. There is no code path from
+`PronunciationHintResult` to `recordResponse`, and `speak_mode_screen.dart`'s
+`_judge` takes its outcome as a parameter specifically so there cannot be.
+
+**2. Playback must finish before the mic opens.** If they overlap, VAD hears
+the app's own synthesised voice and scores the app against itself.
+`WordAudioService.speak` completes on playback end, and `_runTrialTurn` awaits
+it before listening. This is a correctness property, not presentation.
+
+**3. Tolerance is calibrated client-side**, in
+`speech/articulation_tolerance.dart`. The backend returns a **raw** Levenshtein
+distance; that file maps `LadderPosition` → how much is tolerated, sends it as
+the request's `difficulty` so both sides agree, and re-derives the judgement
+locally so the UI can explain it. The bar **loosens** at a fresh similarity
+tier — §4.5's one-dial-at-a-time rule says a child stepping up in visual
+discrimination should not be charged again on articulation at the same moment.
+
+**4. `TARGET_DICT` in `main.py` has three words.** Guardian labels are free
+text, so most words cannot be scored. `PronunciationHintService.canScore`
+probes `GET /` and, when the word is absent, **no clip is recorded at all** —
+not captured, not uploaded (§10). TTS has no such limit, so the echoic
+exercise still works; only the advisory hint drops out.
+> `main.py` already sets the eSpeak env vars for `phonemizer` but never
+> imports it. `phonemizer.phonemize(word, language='id')` would generate the
+> target IPA for any Indonesian word and remove this limit entirely.
+
+The ngrok URL is a **development address that changes when the tunnel
+restarts** — one line in `articulation_backend.dart`. Verify a live backend
+end-to-end with:
+
+```bash
+dart run tool/smoke_articulation_backend.dart   # 6 checks, real host
+```
 
 ---
 
@@ -79,8 +156,8 @@ file — no feature file hardcodes a colour or a font size.
 
 | | Owns | Shared — agree before editing |
 |---|---|---|
-| **IT-1** | `engine/`, `speech/`, `features/child_session/` | `core/theme/`, `data/repositories/` |
-| **IT-2** | `data/`, `photo_pipeline/`, `features/guardian/` | `core/theme/`, `data/repositories/` |
+| **IT-1** | `engine/`, `speech/`, `features/child_session/` | `core/design/`, `data/repositories/` |
+| **IT-2** | `data/`, `photo_pipeline/`, `features/guardian/` | `core/design/`, `data/repositories/` |
 
 `content/` and `widgets/` are jointly touched.
 
@@ -109,7 +186,9 @@ Pinned by the source of truth: `flutter_riverpod` (ADR-1), `firebase_core` /
   without owning each other's screens. Routes carry `childId` in the path rather
   than in ambient state, so a screen can't render the wrong child (§9).
 
-- **No font package.** Deliberate for this pass — see `core/theme/`.
+- **No font package.** Fonts are bundled as static OFL assets under `assets/fonts/`
+  rather than fetched by `google_fonts` — §11 is offline-first, and type must not
+  depend on a network call. See `core/design/tokens.dart`.
 
 ---
 

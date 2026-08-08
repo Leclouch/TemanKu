@@ -37,8 +37,8 @@ void main() {
         childId: child.id,
         module: ModuleId.makanan,
         targetWord: 'pisang',
-        ipaTranscription: 'pisaŋ',
-        phonemeEditDistance: 0,
+        predictedIpa: 'pisaŋ',
+        distance: 0,
         recordedAt: DateTime(2026, 1, 1),
       ),
     );

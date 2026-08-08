@@ -6,9 +6,9 @@ import 'package:temanku/content/keluarga/keluarga_module.dart';
 import 'package:temanku/content/makanan/makanan_module.dart';
 import 'package:temanku/content/module_definition.dart';
 import 'package:temanku/core/constants/domain_enums.dart';
+import 'package:temanku/core/design/design.dart';
 import 'package:temanku/core/routing/app_router.dart';
 import 'package:temanku/core/service_locator.dart';
-import 'package:temanku/core/theme/temanku_theme.dart';
 import 'package:temanku/data/models/child.dart';
 import 'package:temanku/data/models/pronunciation_hint_log.dart';
 import 'package:temanku/data/models/session.dart';
@@ -18,8 +18,9 @@ import 'package:temanku/features/guardian/session_recap.dart';
 
 /// Guardian home — **IT-2.**
 ///
-/// Reads tokens from the same `core/theme/` source as the child screen, at the
-/// guardian temperature — that shared source is the thing this file is proving.
+/// Reads tokens from the same `core/design/` source as the child screen, at
+/// the guardian temperature — that shared source is the thing this file is
+/// proving.
 ///
 /// The five surfaces below, with their source-of-truth constraints:
 ///   - **Intake** (§8) — per-child, one behavioural question per mode, selecting
@@ -45,6 +46,12 @@ import 'package:temanku/features/guardian/session_recap.dart';
 ///     Not a performance graph, and not a history of past positions — there is
 ///     nowhere in this codebase that persists a position's *prior* values, only
 ///     its current one, so "over time" here means "as of now," honestly.
+///
+/// **Layout note.** The five cards are grouped under two [TkSection] headings
+/// rather than stacked flat. Five equally-weighted cards in one column give a
+/// guardian no way to tell setup ("things I do once") from observation
+/// ("things I come back to read"), and an undifferentiated wall of options is
+/// the specific pattern the ADHD guidance flags as a freeze trigger.
 class GuardianHomePlaceholder extends ConsumerWidget {
   const GuardianHomePlaceholder({super.key, required this.childId});
 
@@ -52,58 +59,34 @@ class GuardianHomePlaceholder extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final sessions = ref.watch(sessionRepositoryProvider);
-
-    return Scaffold(
-      appBar: AppBar(title: const Text('Catatan wali')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+    return TkScreen(
+      title: 'Catatan wali',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _IntakeEntryPoint(childId: childId),
-          _SettingsEntryPoint(childId: childId),
-          _UploadEntryPoint(childId: childId),
-          _SessionRecapCard(childId: childId),
-          _FullDataCard(childId: childId),
-          _MilestoneTimeline(childId: childId),
-          const SizedBox(height: 8),
-          Text('Riwayat (dari repository)', style: context.type.display),
-          const SizedBox(height: 8),
-          // Proves the session repository wiring end-to-end against the in-memory
-          // fake. Renders duration + dials, deliberately no score of any kind.
-          FutureBuilder<List<SessionSummary>>(
-            future: sessions.getSessionHistory(childId),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) {
-                return const Padding(
-                  padding: EdgeInsets.all(8),
-                  child: LinearProgressIndicator(),
-                );
-              }
-              final history = snapshot.data!;
-              if (history.isEmpty) {
-                return Text('Belum ada sesi.', style: context.type.body);
-              }
-              return Column(
-                children: [
-                  for (final s in history)
-                    ListTile(
-                      title: Text(
-                        '${s.module.name} · ${s.mode.name}',
-                        style: context.type.body,
-                      ),
-                      subtitle: Text(
-                        buildSessionRecap(s),
-                        style: context.type.body,
-                      ),
-                      trailing: Text(
-                        // Timestamps are the mono role's only job (§12).
-                        '${s.endedAt.day}/${s.endedAt.month}',
-                        style: context.type.mono,
-                      ),
-                    ),
-                ],
-              );
-            },
+          TkSection(
+            label: 'Persiapan',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _IntakeEntryPoint(childId: childId),
+                _UploadEntryPoint(childId: childId),
+                _SettingsEntryPoint(childId: childId),
+              ],
+            ),
+          ),
+          const SizedBox(height: TkSpace.lg),
+          TkSection(
+            label: 'Catatan',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _SessionRecapCard(childId: childId),
+                _FullDataCard(childId: childId),
+                _MilestoneTimeline(childId: childId),
+                _SessionHistory(childId: childId),
+              ],
+            ),
           ),
         ],
       ),
@@ -116,6 +99,19 @@ String _displayNameFor(ModuleId module) => switch (module) {
       ModuleId.keluarga => keluargaModule.displayName,
     };
 
+ModuleDefinition _definitionFor(ModuleId module) => switch (module) {
+      ModuleId.makanan => makananModule,
+      ModuleId.keluarga => keluargaModule,
+    };
+
+/// Day/month/year — the "Data lengkap" section's own date format, distinct
+/// from the day/month-only trailing timestamp the Riwayat list below uses.
+/// This section is meant to stand alone as a reference table (a teacher
+/// might read it long after the session, possibly a year on), so the year
+/// stays explicit rather than assumed.
+String _formatFullDate(DateTime date) =>
+    '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+
 /// The "Intake" card's real entry point (§8) — hands off to [IntakeScreen].
 /// Selects modes only; never sets a starting difficulty.
 class _IntakeEntryPoint extends StatelessWidget {
@@ -125,33 +121,15 @@ class _IntakeEntryPoint extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      color: colors.background,
-      shape: RoundedRectangleBorder(
-        side: BorderSide(color: colors.neutralFeedback),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Intake', style: context.type.display.copyWith(color: colors.text)),
-            const SizedBox(height: 6),
-            Text(
-              'Satu pertanyaan per mode. Memilih mode yang tersedia — bukan '
-              'memperkirakan level.',
-              style: context.type.body.copyWith(color: colors.text),
-            ),
-            const SizedBox(height: 12),
-            OutlinedButton(
-              onPressed: () => context.push(Routes.intakeFor(childId)),
-              child: const Text('Isi intake'),
-            ),
-          ],
-        ),
+    return TkCard(
+      title: 'Intake',
+      subtitle: 'Satu pertanyaan per mode. Memilih mode yang tersedia — '
+          'bukan memperkirakan level.',
+      leading: const _CardIcon(icon: Icons.assignment_outlined),
+      child: TkButton.secondary(
+        label: 'Isi intake',
+        icon: Icons.arrow_forward,
+        onPressed: () => context.push(Routes.intakeFor(childId)),
       ),
     );
   }
@@ -168,32 +146,15 @@ class _SettingsEntryPoint extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      color: colors.background,
-      shape: RoundedRectangleBorder(
-        side: BorderSide(color: colors.neutralFeedback),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Pengaturan anak', style: context.type.display.copyWith(color: colors.text)),
-            const SizedBox(height: 6),
-            Text(
-              'Saran pengucapan (eksperimental) dan pengaturan lain per anak.',
-              style: context.type.body.copyWith(color: colors.text),
-            ),
-            const SizedBox(height: 12),
-            OutlinedButton(
-              onPressed: () => context.push(Routes.childSettingsFor(childId)),
-              child: const Text('Buka pengaturan'),
-            ),
-          ],
-        ),
+    return TkCard(
+      title: 'Pengaturan anak',
+      subtitle: 'Bantuan mode bicara (contoh ucapan + saran pengucapan) dan '
+          'pengaturan suara per anak.',
+      leading: const _CardIcon(icon: Icons.tune_outlined),
+      child: TkButton.secondary(
+        label: 'Buka pengaturan',
+        icon: Icons.arrow_forward,
+        onPressed: () => context.push(Routes.childSettingsFor(childId)),
       ),
     );
   }
@@ -209,106 +170,77 @@ class _UploadEntryPoint extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      color: colors.background,
-      shape: RoundedRectangleBorder(
-        side: BorderSide(color: colors.neutralFeedback),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Unggah foto', style: context.type.display.copyWith(color: colors.text)),
-            const SizedBox(height: 6),
-            Text(
-              'Quality gate, ajakan variasi (lima foto berbeda — anjuran, bukan '
-              'syarat). Pilih modulnya:',
-              style: context.type.body.copyWith(color: colors.text),
+    final c = context.colors;
+    return TkCard(
+      title: 'Foto',
+      subtitle: 'Quality gate dan ajakan variasi (lima foto berbeda — '
+          'anjuran, bukan syarat).',
+      leading: const _CardIcon(icon: Icons.add_a_photo_outlined),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Tambah foto baru',
+            style: context.type.caption.copyWith(
+              color: c.textMuted,
+              fontWeight: FontWeight.w700,
             ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              children: [
-                for (final module in ModuleId.values)
-                  OutlinedButton(
-                    onPressed: () =>
-                        context.push(Routes.photoUploadFor(childId, module)),
-                    child: Text(_displayNameFor(module)),
-                  ),
-              ],
+          ),
+          const SizedBox(height: TkSpace.xs),
+          TkButtonRow(
+            children: [
+              for (final module in ModuleId.values)
+                TkButton.secondary(
+                  label: _displayNameFor(module),
+                  onPressed: () => context.push(Routes.photoUploadFor(childId, module)),
+                ),
+            ],
+          ),
+          const SizedBox(height: TkSpace.md),
+          Text(
+            'Lihat, ubah nama, atau hapus foto tersimpan',
+            style: context.type.caption.copyWith(
+              color: c.textMuted,
+              fontWeight: FontWeight.w700,
             ),
-            const SizedBox(height: 12),
-            Text(
-              'Lihat, ubah nama, atau hapus foto yang sudah tersimpan (§5.5):',
-              style: context.type.body.copyWith(color: colors.text),
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              children: [
-                for (final module in ModuleId.values)
-                  TextButton.icon(
-                    onPressed: () =>
-                        context.push(Routes.photoLibraryFor(childId, module)),
-                    icon: const Icon(Icons.photo_library_outlined, size: 18),
-                    label: Text(_displayNameFor(module)),
-                  ),
-              ],
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(height: TkSpace.xs),
+          TkButtonRow(
+            children: [
+              for (final module in ModuleId.values)
+                TkButton.quiet(
+                  label: _displayNameFor(module),
+                  icon: Icons.photo_library_outlined,
+                  onPressed: () => context.push(Routes.photoLibraryFor(childId, module)),
+                ),
+            ],
+          ),
+        ],
       ),
     );
   }
 }
 
-ModuleDefinition _definitionFor(ModuleId module) => switch (module) {
-      ModuleId.makanan => makananModule,
-      ModuleId.keluarga => keluargaModule,
-    };
+/// The tinted glyph plate every card on this screen leads with.
+///
+/// Scanning a column of same-shaped cards by their titles alone is slow; a
+/// distinct silhouette per card gives the eye somewhere to land first.
+class _CardIcon extends StatelessWidget {
+  const _CardIcon({required this.icon});
 
-/// Day/month/year — the "Data lengkap" section's own date format, distinct
-/// from the day/month-only trailing timestamp the Riwayat list below uses.
-/// This section is meant to stand alone as a reference table (a teacher
-/// might read it long after the session, possibly a year on), so the year
-/// stays explicit rather than assumed.
-String _formatFullDate(DateTime date) =>
-    '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
-
-/// Shared card chrome — same border/shape every guardian card on this screen
-/// uses, factored out once both real (non-stub) cards needed a FutureBuilder
-/// wrapped in it.
-class _GuardianCard extends StatelessWidget {
-  const _GuardianCard({required this.title, required this.child});
-
-  final String title;
-  final Widget child;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      color: colors.background,
-      shape: RoundedRectangleBorder(
-        side: BorderSide(color: colors.neutralFeedback),
-        borderRadius: BorderRadius.circular(12),
+    final c = context.colors;
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: c.primaryAccentWash,
+        borderRadius: TkRadius.sm,
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: context.type.display.copyWith(color: colors.text)),
-            const SizedBox(height: 6),
-            child,
-          ],
-        ),
-      ),
+      child: Icon(icon, size: 21, color: c.primaryAccent),
     );
   }
 }
@@ -324,24 +256,26 @@ class _SessionRecapCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final colors = context.colors;
+    final c = context.colors;
     final sessions = ref.watch(sessionRepositoryProvider);
-    return _GuardianCard(
+    return TkCard(
       title: 'Ringkasan sesi',
+      leading: const _CardIcon(icon: Icons.notes_outlined),
       child: FutureBuilder<List<SessionSummary>>(
         future: sessions.getSessionHistory(childId, limit: 1),
         builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
-              child: LinearProgressIndicator(),
+          if (!snapshot.hasData) return const TkLoading(compact: true);
+          final latest = snapshot.data!;
+          if (latest.isEmpty) {
+            return const TkEmptyState(
+              message: 'Belum ada sesi. Ringkasan muncul setelah sesi pertama.',
+              compact: true,
             );
           }
-          final latest = snapshot.data!;
-          final text = latest.isEmpty
-              ? 'Belum ada sesi.'
-              : buildSessionRecap(latest.first);
-          return Text(text, style: context.type.body.copyWith(color: colors.text));
+          return Text(
+            buildSessionRecap(latest.first),
+            style: context.type.body.copyWith(color: c.text),
+          );
         },
       ),
     );
@@ -524,8 +458,8 @@ class _PronunciationHintDataSection extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 2),
               child: Text(
                 '${_formatFullDate(entry.recordedAt)} · ${_displayNameFor(entry.module)} · '
-                'target "${entry.targetWord}" · IPA: ${entry.ipaTranscription ?? '—'} · '
-                'jarak fonem: ${entry.phonemeEditDistance ?? '—'}',
+                'target "${entry.targetWord}" · IPA: ${entry.predictedIpa ?? '—'} · '
+                'jarak fonem: ${entry.distance ?? '—'}',
                 style: context.type.mono.copyWith(color: colors.text, fontSize: 12),
               ),
             ),
@@ -602,34 +536,32 @@ class _MilestoneTimeline extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final colors = context.colors;
-    return _GuardianCard(
+    return TkCard(
       title: 'Perjalanan',
+      leading: const _CardIcon(icon: Icons.timeline_outlined),
       child: FutureBuilder<List<_MilestoneEntry>>(
         future: _loadMilestones(ref, childId),
         builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
-              child: LinearProgressIndicator(),
-            );
-          }
+          if (!snapshot.hasData) return const TkLoading(compact: true);
           final entries = snapshot.data!;
           if (entries.isEmpty) {
-            return Text(
-              'Belum ada mode aktif untuk anak ini.',
-              style: context.type.body.copyWith(color: colors.text),
+            return const TkEmptyState(
+              message: 'Belum ada mode aktif untuk anak ini.',
+              compact: true,
             );
           }
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               for (final entry in entries)
-                Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Text(
-                    '${entry.moduleLabel} · ${entry.modeLabel}: ${entry.statusText}',
-                    style: context.type.body.copyWith(color: colors.text),
+                TkDetailRow(
+                  label: '${entry.moduleLabel} · ${entry.modeLabel}',
+                  value: entry.statusText,
+                  // The badge states the same thing the sentence does — it is
+                  // a scanning aid, never the only carrier of the meaning.
+                  trailing: TkBadge(
+                    label: entry.mastered ? 'menguasai' : 'berlatih',
+                    tone: entry.mastered ? TkBadgeTone.success : TkBadgeTone.neutral,
                   ),
                 ),
             ],
@@ -652,14 +584,15 @@ class _MilestoneTimeline extends ConsumerWidget {
       for (final mode in child.availableModes) {
         final position = await persistence.load(childId: childId, module: module, mode: mode);
         final tierCopy = definition.similarityTierCopy[position.similarityTier];
-        final statusText = dialEngine.isAtCeiling(position, mode)
-            ? 'sudah menguasai — $tierCopy'
-            : 'sedang berlatih dengan $tierCopy';
+        final mastered = dialEngine.isAtCeiling(position, mode);
         entries.add(
           _MilestoneEntry(
             moduleLabel: definition.displayName,
             modeLabel: modeLabel(mode),
-            statusText: statusText,
+            mastered: mastered,
+            statusText: mastered
+                ? 'Sudah menguasai — $tierCopy'
+                : 'Sedang berlatih dengan $tierCopy',
           ),
         );
       }
@@ -668,14 +601,94 @@ class _MilestoneTimeline extends ConsumerWidget {
   }
 }
 
+/// Proves the session repository wiring end-to-end against the in-memory fake.
+/// Renders duration + dials, deliberately no score of any kind.
+class _SessionHistory extends ConsumerWidget {
+  const _SessionHistory({required this.childId});
+
+  final String childId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.colors;
+    final sessions = ref.watch(sessionRepositoryProvider);
+    return TkCard(
+      title: 'Riwayat',
+      leading: const _CardIcon(icon: Icons.history_outlined),
+      child: FutureBuilder<List<SessionSummary>>(
+        future: sessions.getSessionHistory(childId),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) return const TkLoading(compact: true);
+          final history = snapshot.data!;
+          if (history.isEmpty) {
+            return const TkEmptyState(message: 'Belum ada sesi.', compact: true);
+          }
+          return Column(
+            children: [
+              for (var i = 0; i < history.length; i++) ...[
+                if (i > 0) Divider(color: c.border, height: TkSpace.lg),
+                _SessionRow(summary: history[i]),
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _SessionRow extends StatelessWidget {
+  const _SessionRow({required this.summary});
+
+  final SessionSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final t = context.type;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  TkBadge(label: summary.module.name),
+                  const SizedBox(width: TkSpace.xxs),
+                  TkBadge(label: summary.mode.name, tone: TkBadgeTone.info),
+                ],
+              ),
+              const SizedBox(height: TkSpace.xs),
+              Text(
+                buildSessionRecap(summary),
+                style: t.bodySm.copyWith(color: c.text),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: TkSpace.sm),
+        Text(
+          // Timestamps are the mono role's only job (§12).
+          '${summary.endedAt.day}/${summary.endedAt.month}',
+          style: t.mono.copyWith(color: c.textMuted),
+        ),
+      ],
+    );
+  }
+}
+
 class _MilestoneEntry {
   const _MilestoneEntry({
     required this.moduleLabel,
     required this.modeLabel,
     required this.statusText,
+    required this.mastered,
   });
 
   final String moduleLabel;
   final String modeLabel;
   final String statusText;
+  final bool mastered;
 }

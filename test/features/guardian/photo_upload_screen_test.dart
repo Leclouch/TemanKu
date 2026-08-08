@@ -8,7 +8,7 @@ import 'package:image_picker_platform_interface/image_picker_platform_interface.
 import 'package:temanku/content/makanan/makanan_module.dart';
 import 'package:temanku/core/constants/domain_enums.dart';
 import 'package:temanku/core/service_locator.dart';
-import 'package:temanku/core/theme/temanku_theme.dart';
+import 'package:temanku/core/design/design.dart';
 import 'package:temanku/data/models/photo.dart';
 import 'package:temanku/data/repositories/in_memory/in_memory_photo_repository.dart';
 import 'package:temanku/data/repositories/photo_repository.dart';

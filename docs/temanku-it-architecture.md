@@ -107,8 +107,8 @@ test/
 
 | Owns primarily | Touches occasionally | Shared, agree before editing |
 |---|---|---|
-| **IT-1:** `engine/`, `speech/`, `features/child_session/` | `content/` (module data) | `core/theme/`, `data/repositories/` (interfaces only) |
-| **IT-2:** `data/`, `photo_pipeline/`, `features/guardian/` | `content/` (module data) | `core/theme/`, `data/repositories/` (interfaces only) |
+| **IT-1:** `engine/`, `speech/`, `features/child_session/` | `content/` (module data) | `core/design/`, `data/repositories/` (interfaces only) |
+| **IT-2:** `data/`, `photo_pipeline/`, `features/guardian/` | `content/` (module data) | `core/design/`, `data/repositories/` (interfaces only) |
 
 **Practical rule:** if a change touches a shared folder, say so in the evening checkpoint before merging — those are the only files where an uncoordinated change from either of you can break the other's work.
 

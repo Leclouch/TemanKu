@@ -19,8 +19,8 @@ class PronunciationHintLogEntry {
     required this.childId,
     required this.module,
     required this.targetWord,
-    required this.ipaTranscription,
-    required this.phonemeEditDistance,
+    required this.predictedIpa,
+    required this.distance,
     required this.recordedAt,
   });
 
@@ -35,8 +35,8 @@ class PronunciationHintLogEntry {
   /// Raw technical values from [PronunciationHintResult] — see that class's
   /// own doc comments for why no pass/fail verdict field exists to log here
   /// in the first place.
-  final String? ipaTranscription;
-  final int? phonemeEditDistance;
+  final String? predictedIpa;
+  final int? distance;
 
   final DateTime recordedAt;
 }

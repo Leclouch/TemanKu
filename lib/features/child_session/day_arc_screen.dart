@@ -32,11 +32,10 @@ import 'package:temanku/content/keluarga/keluarga_module.dart';
 import 'package:temanku/content/makanan/makanan_module.dart';
 import 'package:temanku/content/module_definition.dart';
 import 'package:temanku/core/constants/domain_enums.dart';
+import 'package:temanku/core/design/design.dart';
 import 'package:temanku/core/routing/app_router.dart';
 import 'package:temanku/core/service_locator.dart';
-import 'package:temanku/core/theme/temanku_theme.dart';
 import 'package:temanku/data/models/child.dart';
-import 'package:temanku/widgets/exit_dot.dart';
 import 'package:temanku/widgets/mascot.dart';
 
 /// Priority when a child has more than one mode enabled — never a choice the
@@ -117,99 +116,62 @@ class _DayArcScreenState extends ConsumerState<DayArcScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Child surface runs a different theme temperature, applied locally —
-    // same rule as tap/match/speak mode screens, all sourced from core/theme/.
-    return Theme(
-      data: TemanKuTheme.child,
-      child: Builder(
-        builder: (context) {
-          final colors = context.colors;
-          return Scaffold(
-            backgroundColor: colors.background,
-            body: SafeArea(
-              child: Stack(
-                children: [
-                  Center(child: _buildBody(context)),
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: ExitDot(onExit: () => context.pop()),
-                  ),
-                  // Purely decorative corner element — day-arc only (see
-                  // widgets/mascot.dart's own doc comment for why tap/match/
-                  // speak never get this). Bottom-left, opposite the exit
-                  // dot, small enough to never compete with the cards above it.
-                  const Positioned(
-                    left: 8,
-                    bottom: 8,
-                    child: Mascot(size: 88),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
+    return TkChildScreen(
+      onExit: () => context.pop(),
+      // Purely decorative corner element — day-arc only (see
+      // widgets/mascot.dart's own doc comment for why tap/match/speak never
+      // get this). Bottom-left, opposite the exit dot, small enough to never
+      // compete with the cards above it.
+      corner: const Mascot(size: 88),
+      child: Builder(builder: _buildBody),
     );
   }
 
   Widget _buildBody(BuildContext context) {
     final colors = context.colors;
 
-    if (_loading) return const CircularProgressIndicator();
+    if (_loading) return const TkLoading();
 
     final child = _child;
     if (child == null) {
       // Setup gap (bad/stale childId), not a child-facing failure state —
       // same neutral-copy treatment tap/match/speak give a missing-photos
       // setup gap.
-      return Padding(
-        padding: const EdgeInsets.all(24),
-        child: Text(
-          'Profil anak tidak ditemukan.',
-          textAlign: TextAlign.center,
-          style: context.type.body.copyWith(color: colors.text),
-        ),
-      );
+      return const TkChildNotice(message: 'Profil anak tidak ditemukan.');
     }
 
     final preferredMode = _preferredModeFor(child.availableModes);
 
-    return ConstrainedBox(
-      // Bounded, not fixed — phone-first, tablet free (§11), same rule as
-      // every other child session screen.
-      constraints: const BoxConstraints(maxWidth: 480),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Hari Ini Bersama ${child.name}',
-              textAlign: TextAlign.center,
-              style: context.type.display.copyWith(color: colors.text),
-            ),
-            const SizedBox(height: 32),
-            for (final module in _dayArcModules) ...[
-              _ModuleCard(
-                module: module,
-                onTap: preferredMode == null
-                    ? null
-                    : () => context.push(
-                          _routeFor(widget.childId, module.definition.id, preferredMode),
-                        ),
-              ),
-              const SizedBox(height: 20),
-            ],
-            if (preferredMode == null)
-              Text(
-                'Belum ada mode yang aktif untuk anak ini. Minta wali mengisi intake dulu.',
-                textAlign: TextAlign.center,
-                style: context.type.body.copyWith(color: colors.neutralFeedback),
-              ),
-          ],
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'Hari Ini Bersama ${child.name}',
+          textAlign: TextAlign.center,
+          style: context.type.displayLg.copyWith(color: colors.text),
         ),
-      ),
+        const SizedBox(height: TkSpace.xxl),
+        for (final module in _dayArcModules) ...[
+          _ModuleCard(
+            module: module,
+            onTap: preferredMode == null
+                ? null
+                : () => context.push(
+                      _routeFor(widget.childId, module.definition.id, preferredMode),
+                    ),
+          ),
+          const SizedBox(height: TkSpace.sm),
+        ],
+        if (preferredMode == null)
+          Padding(
+            padding: const EdgeInsets.only(top: TkSpace.xs),
+            child: Text(
+              'Belum ada mode yang aktif untuk anak ini. Minta wali mengisi intake dulu.',
+              textAlign: TextAlign.center,
+              style: context.type.body.copyWith(color: colors.textMuted),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -234,27 +196,43 @@ class _ModuleCard extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: TkRadius.lg,
           onTap: onTap,
           child: Container(
-            constraints: const BoxConstraints(minHeight: TemanKuMetrics.minTouchTarget * 1.5),
-            padding: const EdgeInsets.all(20),
+            // The child-scale target, not the 44pt guardian floor — this is
+            // the doorway a child taps, under less motor control than the
+            // guardian's corner cluster assumes.
+            constraints: const BoxConstraints(
+              minHeight: TemanKuMetrics.childTouchTarget * 1.4,
+            ),
+            padding: const EdgeInsets.all(TkSpace.lg),
             decoration: BoxDecoration(
-              color: colors.background,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: colors.neutralFeedback, width: 2),
+              color: colors.surface,
+              borderRadius: TkRadius.lg,
+              border: Border.all(color: colors.borderStrong, width: TkStroke.regular),
             ),
             child: Row(
               children: [
-                Icon(module.icon, size: 32, color: colors.primaryAccent),
-                const SizedBox(width: 16),
+                // The icon gets its own tinted plate rather than floating on
+                // the card: at this size a bare glyph reads as an ornament,
+                // and the card's one job is to look like a door.
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: colors.primaryAccentWash,
+                    borderRadius: TkRadius.md,
+                  ),
+                  child: Icon(module.icon, size: 30, color: colors.primaryAccent),
+                ),
+                const SizedBox(width: TkSpace.md),
                 Expanded(
                   // TODO: add recorded Bahasa Indonesia narration per
                   // source-of-truth §4.3 — this is the hook point (play on
                   // card appearance/tap). Text-only for MVP.
                   child: Text(
                     module.framingText,
-                    style: context.type.body.copyWith(color: colors.text),
+                    style: context.type.titleLg.copyWith(color: colors.text),
                   ),
                 ),
               ],

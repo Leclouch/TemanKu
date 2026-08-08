@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
-import 'package:temanku/core/theme/temanku_theme.dart';
+import 'package:temanku/core/design/design.dart';
 
 /// Renders a photo from [Photo.localPath] — **shared component, jointly owned.**
 ///
@@ -39,10 +39,12 @@ class PhotoImage extends StatelessWidget {
 
   Widget _fallback(BuildContext context, Object error, StackTrace? stackTrace) {
     final colors = context.colors;
+    // Neutral chrome, not a feedback token — a missing file is a setup gap,
+    // and must never render in the same colour an answer outcome uses.
     return Container(
-      color: colors.neutralFeedback.withValues(alpha: 0.3),
+      color: colors.surfaceTinted,
       alignment: Alignment.center,
-      child: Icon(Icons.image_outlined, color: colors.neutralFeedback),
+      child: Icon(Icons.image_outlined, color: colors.textMuted),
     );
   }
 }

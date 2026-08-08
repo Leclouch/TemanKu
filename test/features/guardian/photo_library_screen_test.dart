@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:temanku/core/constants/domain_enums.dart';
 import 'package:temanku/core/service_locator.dart';
-import 'package:temanku/core/theme/temanku_theme.dart';
+import 'package:temanku/core/design/design.dart';
 import 'package:temanku/data/models/photo.dart';
 import 'package:temanku/data/repositories/in_memory/in_memory_photo_repository.dart';
 import 'package:temanku/features/guardian/photo_library_screen.dart';
@@ -48,7 +48,9 @@ void main() {
     await tester.pumpWidget(_buildApp(repo));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('(1)'), findsNWidgets(2));
+    // One count badge per category section. The count moved out of the
+    // heading string and into a TkBadge — see _CategorySection.
+    expect(find.text('1 foto'), findsNWidgets(2));
     expect(find.text('pisang'), findsOneWidget);
     expect(find.text('sikat gigi'), findsOneWidget);
   });
@@ -126,7 +128,7 @@ void main() {
 
     await tester.pumpWidget(_buildApp(repo));
     await tester.pumpAndSettle();
-    expect(find.text('(belum diberi nama)'), findsOneWidget);
+    expect(find.text('Belum diberi nama'), findsOneWidget);
 
     await tester.tap(find.byIcon(Icons.more_vert));
     await tester.pumpAndSettle();

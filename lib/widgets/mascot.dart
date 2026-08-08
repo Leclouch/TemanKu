@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'package:temanku/core/theme/temanku_theme.dart';
+import 'package:temanku/core/design/design.dart';
 
 /// A small, flat-geometric mascot — **`day_arc_screen.dart` only.**
 ///
@@ -16,13 +16,16 @@ import 'package:temanku/core/theme/temanku_theme.dart';
 /// "what's next" screen between trials, not a trial itself, which is the
 /// only reason this exists at all.
 ///
-/// Colour comes entirely from `core/theme/` tokens, read once at build time
-/// — never a literal `Color(0x...)`. Only tokens already sanctioned for the
-/// **child** surface are used ([TemanKuColors.primaryAccent],
-/// [TemanKuColors.background], [TemanKuColors.neutralFeedback]).
-/// [TemanKuColors.secondaryAccent] is deliberately never touched here even
-/// though it exists on the same class: its own doc comment marks it
-/// guardian-surface-only, and day-arc is a child screen.
+/// Colour comes entirely from `core/design/` tokens, read once at build time
+/// — never a literal `Color(0x...)`. Only neutral chrome tokens are used
+/// ([TemanKuColors.primaryAccent], [TemanKuColors.background],
+/// [TemanKuColors.textMuted]).
+///
+/// No feedback token appears here, deliberately: the mascot is on screen
+/// alongside the task, and a character painted in the same green or yellow
+/// the answer ring uses would read as commentary on the child's answer.
+/// [TemanKuColors.secondaryAccent] is likewise never touched — its own doc
+/// comment marks it guardian-surface-only, and day-arc is a child screen.
 class Mascot extends StatelessWidget {
   const Mascot({super.key, this.size = 96, this.animate = true});
 
@@ -43,19 +46,24 @@ class Mascot extends StatelessWidget {
       painter: _MascotPainter(
         body: colors.primaryAccent,
         face: colors.background,
-        feet: colors.neutralFeedback,
+        feet: colors.textMuted,
       ),
     );
 
-    if (!animate) return painted;
+    // `animate: false` is the caller's opt-out; `context.reduceMotion` is the
+    // platform's, and it wins unconditionally. Motion control is a stated
+    // requirement for this audience, not a preference — and the one animation
+    // on the child surface is exactly the one a motion-sensitive user would
+    // have turned the setting off for.
+    if (!animate || context.reduceMotion) return painted;
 
     // One-shot, not looping: TweenAnimationBuilder animates once from its
     // initial build to the target and then simply stops — there is no
     // controller here to ever repeat() or reverse().
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
-      duration: const Duration(milliseconds: 350),
-      curve: Curves.easeOut,
+      duration: TkMotion.slow,
+      curve: TkMotion.enter,
       builder: (context, t, child) => Opacity(
         opacity: t,
         child: Transform.scale(scale: 0.94 + (0.06 * t), child: child),

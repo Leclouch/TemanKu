@@ -38,7 +38,7 @@ import 'package:temanku/content/makanan/makanan_module.dart';
 import 'package:temanku/content/module_definition.dart';
 import 'package:temanku/core/constants/domain_enums.dart';
 import 'package:temanku/core/service_locator.dart';
-import 'package:temanku/core/theme/temanku_theme.dart';
+import 'package:temanku/core/design/design.dart';
 import 'package:temanku/data/models/child.dart';
 import 'package:temanku/data/models/photo.dart';
 import 'package:temanku/data/models/pronunciation_hint_log.dart';
@@ -48,9 +48,10 @@ import 'package:temanku/speech/audio/wav_clip.dart';
 import 'package:temanku/speech/audio_segment_recorder.dart';
 import 'package:temanku/speech/no_hint_service.dart';
 import 'package:temanku/speech/pronunciation_hint_service.dart';
+import 'package:temanku/speech/articulation_tolerance.dart';
+import 'package:temanku/speech/tts/word_audio_service.dart';
 import 'package:temanku/speech/vad_service.dart';
 import 'package:temanku/widgets/answer_target.dart';
-import 'package:temanku/widgets/exit_dot.dart';
 import 'package:temanku/widgets/mastery_closure_prompt.dart';
 import 'package:temanku/widgets/photo_image.dart';
 
@@ -88,8 +89,28 @@ class _SpeakModeScreenState extends ConsumerState<SpeakModeScreen> {
   String? _setupError;
 
   bool _listening = false;
+
+  /// True while the model word is being spoken. The microphone is closed for
+  /// this whole window — see [_runTrialTurn].
+  bool _speaking = false;
+
   PronunciationHintResult? _hintResult;
   Timer? _autoAdvanceTimer;
+
+  /// Speaks the target word — the model half of the echoic trial
+  /// (`speech/tts/word_audio_service.dart`).
+  WordAudioService _wordAudio = const NoWordAudioService();
+
+  /// The child's current rung, kept because [ArticulationTolerance] needs it
+  /// to calibrate the hint and only [_composeTrial] is handed it.
+  LadderPosition _position = const LadderPosition.start();
+
+  /// Whether the backend has a target IPA for this trial's word at all. Its
+  /// dictionary is small and the app's labels are guardian-typed free text,
+  /// so this is false far more often than not — see
+  /// [PronunciationHintService.canScore]. When false, no clip is recorded
+  /// and nothing is uploaded.
+  bool _wordIsScorable = false;
 
   /// Bumped every time a new trial is composed. A hint request started for
   /// an earlier trial checks this before applying its result, so a slow
@@ -115,6 +136,10 @@ class _SpeakModeScreenState extends ConsumerState<SpeakModeScreen> {
     final child = await ref.read(childRepositoryProvider).getChild(widget.childId);
     final hintEnabled = child?.pronunciationHintEnabled ?? false;
     _hintService = ref.read(pronunciationHintServiceProvider(hintEnabled));
+    // Same consent flag gates both — they share one external host. See
+    // `wordAudioServiceProvider`'s own note on why, and on the asymmetry
+    // between sending a word and sending a recording of a child.
+    _wordAudio = ref.read(wordAudioServiceProvider(hintEnabled));
     _recorder = hintEnabled ? MicAudioSegmentRecorder() : null;
 
     final position = await ref.read(ladderPersistenceProvider).load(
@@ -143,14 +168,31 @@ class _SpeakModeScreenState extends ConsumerState<SpeakModeScreen> {
         recentTargetZones: const [],
       );
       if (!mounted) return;
+      final generation = _trialGeneration;
+      final word = trial.target.label ?? '';
+
       setState(() {
         _trial = trial;
+        _position = position;
         _listening = false;
+        _speaking = false;
         _hintResult = null;
+        _wordIsScorable = false;
         _loading = false;
         _setupError = null;
       });
-      unawaited(_listen());
+
+      // Asked once per trial, off the critical path — the answer only decides
+      // whether a clip gets recorded later, and the cached result makes this
+      // free after the first trial of a session.
+      unawaited(
+        _hintService.canScore(word).then((scorable) {
+          if (!mounted || generation != _trialGeneration) return;
+          setState(() => _wordIsScorable = scorable);
+        }),
+      );
+
+      unawaited(_runTrialTurn(word, generation));
     } on StateError {
       // Not enough photos to compose a trial — a setup gap, not a child-facing
       // failure. Neutral copy, no alarm colour, same as everywhere else here.
@@ -162,6 +204,52 @@ class _SpeakModeScreenState extends ConsumerState<SpeakModeScreen> {
     }
   }
 
+  /// One echoic turn: **model the word, then listen for the echo.**
+  ///
+  /// The ordering is a correctness property, not presentation. If the
+  /// microphone were open while the app speaks, VAD would flag the app's own
+  /// synthesised voice as the child's utterance and the clip sent for scoring
+  /// would be the app scoring itself — producing an excellent distance for a
+  /// child who said nothing at all. [WordAudioService.speak] completes only
+  /// when playback has finished, and listening starts strictly after.
+  ///
+  /// A model that fails to play (offline, muted, consent off) simply doesn't
+  /// happen: [speak] resolves false and the turn proceeds straight to
+  /// listening. The guardian can always say the word themselves, so nothing
+  /// here is allowed to block the trial.
+  Future<void> _runTrialTurn(String word, int generation) async {
+    if (word.isNotEmpty) {
+      setState(() => _speaking = true);
+      await _wordAudio.speak(word);
+      if (!mounted || generation != _trialGeneration) return;
+      setState(() => _speaking = false);
+    }
+    await _listen();
+  }
+
+  /// Replays the model on demand — the "Dengar lagi" affordance.
+  ///
+  /// Cancels the in-flight listen first, then re-runs the full turn, so a
+  /// replay mid-attempt cannot leave two VAD sessions racing for the mic.
+  Future<void> _replayWord() async {
+    final trial = _trial;
+    if (trial == null || _speaking) return;
+
+    _autoAdvanceTimer?.cancel();
+    await _controller.vad.cancel();
+    unawaited(_recorder?.stop());
+    if (!mounted) return;
+
+    // A fresh generation retires the listen that was in flight — its
+    // continuation sees the bump and returns without touching state.
+    _trialGeneration++;
+    setState(() {
+      _listening = false;
+      _hintResult = null;
+    });
+    await _runTrialTurn(trial.target.label ?? '', _trialGeneration);
+  }
+
   Future<void> _listen() async {
     final trial = _trial;
     if (trial == null) return;
@@ -169,7 +257,11 @@ class _SpeakModeScreenState extends ConsumerState<SpeakModeScreen> {
 
     setState(() => _listening = true);
 
-    final recorder = _recorder;
+    // Only record when there is something the backend could actually score.
+    // "No audio leaves the device" is strongest when the audio was never
+    // captured (§10) — and with a three-word dictionary against free-text
+    // labels, not-scorable is the common case, not the edge case.
+    final recorder = _wordIsScorable ? _recorder : null;
     if (recorder != null) await recorder.start();
 
     final event = await _controller.vad.listenForUtterance();
@@ -215,9 +307,10 @@ class _SpeakModeScreenState extends ConsumerState<SpeakModeScreen> {
     final result = await _hintService.scorePronunciation(
       audioClip: clip,
       targetWord: targetWord,
-      // Fixed for now — deliberately not wired to the dial engine's tiers
-      // yet (task scope, see `pronunciation_hint_service.dart`).
-      difficulty: defaultPronunciationHintDifficulty,
+      // Calibrated to the child's current rung rather than a fixed constant
+      // — see `speech/articulation_tolerance.dart` for why the bar loosens
+      // at a fresh tier instead of tightening.
+      tolerance: ArticulationTolerance.forPosition(_position),
     );
     if (!mounted || generation != _trialGeneration || result == null) return;
     setState(() => _hintResult = result);
@@ -234,8 +327,8 @@ class _SpeakModeScreenState extends ConsumerState<SpeakModeScreen> {
               childId: widget.childId,
               module: widget.module,
               targetWord: targetWord,
-              ipaTranscription: result.ipaTranscription,
-              phonemeEditDistance: result.phonemeEditDistance,
+              predictedIpa: result.predictedIpa,
+              distance: result.distance,
               recordedAt: DateTime.now(),
             ),
           ),
@@ -249,7 +342,14 @@ class _SpeakModeScreenState extends ConsumerState<SpeakModeScreen> {
 
     // Guardian's tap (or the auto-flagged notAttempted) passes straight
     // through — SpeakModeController.judge has nothing to derive, unlike
-    // tap/match. The hint result, if any, is never consulted here.
+    // tap/match.
+    //
+    // **[_hintResult] is deliberately not read here, and must never be.**
+    // The hint highlights a button (see [_GuardianJudgeCluster]); the
+    // guardian's finger is what commits it. `outcome` arrives from an
+    // onTap callback or from the VAD silence timer — never from the model.
+    // That is §6, and it is the reason this line takes a parameter instead
+    // of consulting state.
     final resolved = _controller.judge(trial, outcome);
     final correct = resolved == TrialOutcome.correct;
 
@@ -273,7 +373,7 @@ class _SpeakModeScreenState extends ConsumerState<SpeakModeScreen> {
 
     // Same settle beat as tap/match mode before the next trial replaces
     // this one.
-    await Future.delayed(const Duration(milliseconds: 500));
+    await Future.delayed(TkMotion.feedbackHold);
     if (!mounted) return;
 
     if (result.masteredAtCeiling) {
@@ -289,91 +389,134 @@ class _SpeakModeScreenState extends ConsumerState<SpeakModeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Theme(
-      data: TemanKuTheme.child,
-      child: Builder(
-        builder: (context) {
-          final colors = context.colors;
-          return Scaffold(
-            backgroundColor: colors.background,
-            body: SafeArea(
-              child: Stack(
-                children: [
-                  Center(child: _buildBody(context)),
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: ExitDot(onExit: () => context.pop()),
-                  ),
-                  if (_trial != null && !_loading && _setupError == null)
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 16,
-                      child: Center(
-                        child: _GuardianJudgeCluster(
-                          enabled: !_listening,
-                          showNotAttempted: !_controller.vad.providesAutomaticSilenceDetection,
-                          hint: _hintResult,
-                          onJudge: _judge,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
+    final showJudge = _trial != null && !_loading && _setupError == null;
+    return TkChildScreen(
+      onExit: () => context.pop(),
+      bottomOverlay: showJudge
+          ? _GuardianJudgeCluster(
+              enabled: !_listening,
+              showNotAttempted: !_controller.vad.providesAutomaticSilenceDetection,
+              hint: _hintResult,
+              onJudge: _judge,
+            )
+          : null,
+      child: Builder(builder: _buildBody),
     );
   }
 
   Widget _buildBody(BuildContext context) {
     final colors = context.colors;
 
-    if (_loading) return const CircularProgressIndicator();
+    if (_loading) return const TkLoading();
 
-    if (_setupError != null) {
-      return Padding(
-        padding: const EdgeInsets.all(24),
-        child: Text(
-          _setupError!,
-          textAlign: TextAlign.center,
-          style: context.type.body.copyWith(color: colors.text),
-        ),
-      );
-    }
+    if (_setupError != null) return TkChildNotice(message: _setupError!);
 
     final trial = _trial!;
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 480),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              trial.instruction,
-              textAlign: TextAlign.center,
-              style: context.type.display.copyWith(color: colors.text),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          trial.instruction,
+          textAlign: TextAlign.center,
+          style: context.type.displayLg.copyWith(color: colors.text),
+        ),
+        const SizedBox(height: TkSpace.xl),
+        _Stimulus(target: trial.target, definition: _definitionFor(widget.module)),
+        const SizedBox(height: TkSpace.sm),
+        _ReplayButton(
+          // Disabled only while it is already speaking — never while
+          // listening. A child who wants the model again mid-attempt is
+          // making a reasonable request, and [_replayWord] cancels the
+          // in-flight listen cleanly to serve it.
+          onTap: _speaking ? null : _replayWord,
+          speaking: _speaking,
+        ),
+        SizedBox(
+          height: TkSpace.xxl,
+          // Fixed-height slot so the stimulus above never shifts as the turn
+          // moves through its phases — the same no-reflow rule the guardian
+          // cluster's reserved space below follows.
+          child: Center(
+            child: _speaking
+                ? Text(
+                    'dengarkan…',
+                    style: context.type.body.copyWith(color: colors.textMuted),
+                  )
+                : _listening
+                    ? Text(
+                        'sekarang giliranmu',
+                        // Muted chrome, not a feedback token: this says the
+                        // mic is open, and must not read as a verdict on
+                        // what was said.
+                        style: context.type.body.copyWith(color: colors.textMuted),
+                      )
+                    : null,
+          ),
+        ),
+        // Reserves the guardian cluster's height so the stimulus above
+        // never shifts position when it appears — same fixed-position
+        // rule the always-visible exit dot follows.
+        const SizedBox(height: 72),
+      ],
+    );
+  }
+}
+
+/// "Dengar lagi" — replays the model word.
+///
+/// Child-facing and deliberately large: unlike the guardian's ✅/❌ cluster,
+/// which is styled to read as *not for you*, this one is for the child, and
+/// asking to hear the word again is a self-advocacy move worth making easy.
+/// Sized to [TemanKuMetrics.childTouchTarget] for that reason.
+class _ReplayButton extends StatelessWidget {
+  const _ReplayButton({required this.onTap, required this.speaking});
+
+  final VoidCallback? onTap;
+  final bool speaking;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Semantics(
+      button: true,
+      label: 'Dengar lagi',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: TkRadius.pill,
+          child: Container(
+            constraints: const BoxConstraints(
+              minHeight: TemanKuMetrics.childTouchTarget,
             ),
-            const SizedBox(height: 24),
-            _Stimulus(target: trial.target, definition: _definitionFor(widget.module)),
-            const SizedBox(height: 16),
-            SizedBox(
-              height: 24,
-              child: _listening
-                  ? Text(
-                      'mendengarkan…',
-                      style: context.type.body.copyWith(color: colors.neutralFeedback),
-                    )
-                  : null,
+            padding: const EdgeInsets.symmetric(
+              horizontal: TkSpace.lg,
+              vertical: TkSpace.sm,
             ),
-            // Reserves the guardian cluster's height so the stimulus above
-            // never shifts position when it appears — same fixed-position
-            // rule the always-visible exit dot follows.
-            const SizedBox(height: 72),
-          ],
+            decoration: BoxDecoration(
+              color: speaking ? c.primaryAccentWash : c.surface,
+              borderRadius: TkRadius.pill,
+              border: Border.all(
+                color: speaking ? c.primaryAccent : c.borderStrong,
+                width: TkStroke.regular,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  speaking ? Icons.volume_up_rounded : Icons.replay_rounded,
+                  size: 26,
+                  color: speaking ? c.primaryAccent : c.text,
+                ),
+                const SizedBox(width: TkSpace.xs),
+                Text(
+                  'Dengar lagi',
+                  style: context.type.titleLg.copyWith(color: c.text),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -396,11 +539,11 @@ class _Stimulus extends StatelessWidget {
     return AnswerTarget(
       style: definition.targetStyle,
       label: target.label,
-      labelFontSize: 26,
+      labelStyle: context.type.titleLg,
       child: SizedBox(
         width: 160,
         height: 160,
-        child: PhotoImage(localPath: target.localPath, borderRadius: BorderRadius.circular(12)),
+        child: PhotoImage(localPath: target.localPath, borderRadius: TkRadius.sm),
       ),
     );
   }
@@ -408,9 +551,25 @@ class _Stimulus extends StatelessWidget {
 
 /// The guardian's ✅/❌ corner cluster (§6) — small and muted, "positioned
 /// to read as *not for you* to the child" (`speech/vad_service.dart`'s own
-/// phrase for it). [hint], when present, renders as a strictly secondary
-/// line under the buttons: smaller type, muted colour, never inside a
-/// button, never able to change which button is enabled or pre-tapped.
+/// phrase for it).
+///
+/// ## What the hint is allowed to do here
+///
+/// [hint], when present, does two things and no others: it **outlines** the
+/// button its [PronunciationHintResult.suggestedOutcome] points at, and it
+/// renders a secondary line underneath with the phonemes heard, the distance,
+/// and the tolerance that distance was measured against.
+///
+/// What it never does: press anything, disable anything, reorder anything, or
+/// change what a tap means. Every button stays live and equally reachable
+/// whether the hint agrees with the guardian or not — a suggestion the
+/// guardian has to fight is worse than no suggestion, so disagreeing costs
+/// exactly one tap, the same as agreeing.
+///
+/// The outline is drawn in [TemanKuColors.info], deliberately **not** in the
+/// feedback tokens the buttons themselves carry. A green ring around the
+/// green ✅ would read as "this answer was correct"; a blue ring reads as
+/// "the system is pointing here", which is what it means.
 class _GuardianJudgeCluster extends StatelessWidget {
   const _GuardianJudgeCluster({
     required this.enabled,
@@ -430,52 +589,94 @@ class _GuardianJudgeCluster extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _JudgeButton(
-              icon: Icons.check_circle_outline,
-              // Success feedback token — never a plain green Icons colour
-              // pulled from Material directly (core/theme/ rule).
-              color: colors.successFeedback,
-              semanticLabel: 'Benar',
-              enabled: enabled,
-              onTap: () => onJudge(TrialOutcome.correct),
-            ),
-            const SizedBox(width: 12),
-            _JudgeButton(
-              icon: Icons.replay_circle_filled_outlined,
-              // §12: equal visual weight to success — neutralFeedback, never
-              // an alarm/red token.
-              color: colors.neutralFeedback,
-              semanticLabel: 'Coba lagi',
-              enabled: enabled,
-              onTap: () => onJudge(TrialOutcome.incorrect),
-            ),
-            if (showNotAttempted) ...[
-              const SizedBox(width: 12),
+        // A quiet plate under the cluster. It does two jobs: it groups the
+        // three buttons as one guardian control rather than three loose
+        // glyphs, and it separates them from the child's own surface — the
+        // "not for you" read §6 asks for is much stronger when the cluster
+        // sits on its own ground.
+        Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: TkSpace.xs,
+            vertical: TkSpace.xxs,
+          ),
+          decoration: BoxDecoration(
+            color: colors.surface,
+            borderRadius: TkRadius.pill,
+            border: Border.all(color: colors.border, width: TkStroke.hairline),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
               _JudgeButton(
-                icon: Icons.remove_circle_outline,
-                color: colors.neutralFeedback,
-                semanticLabel: 'Tidak mencoba',
+                icon: Icons.check_circle_outline,
+                // Success feedback token — never a plain green Icons colour
+                // pulled from Material directly (core/design/ rule).
+                color: colors.successFeedback,
+                semanticLabel: 'Benar',
                 enabled: enabled,
-                onTap: () => onJudge(TrialOutcome.notAttempted),
+                suggested: _suggests(TrialOutcome.correct),
+                onTap: () => onJudge(TrialOutcome.correct),
               ),
+              const SizedBox(width: TkSpace.xs),
+              _JudgeButton(
+                icon: Icons.replay_circle_filled_outlined,
+                // §12: equal visual weight to success — neutralFeedback, never
+                // an alarm/red token.
+                color: colors.neutralFeedback,
+                semanticLabel: 'Coba lagi',
+                enabled: enabled,
+                suggested: _suggests(TrialOutcome.incorrect),
+                onTap: () => onJudge(TrialOutcome.incorrect),
+              ),
+              if (showNotAttempted) ...[
+                const SizedBox(width: TkSpace.xs),
+                _JudgeButton(
+                  // Not an outcome the child produced — muted chrome, so it
+                  // never reads as a third verdict alongside the two above.
+                  icon: Icons.remove_circle_outline,
+                  color: colors.textMuted,
+                  semanticLabel: 'Tidak mencoba',
+                  enabled: enabled,
+                  suggested: _suggests(TrialOutcome.notAttempted),
+                  onTap: () => onJudge(TrialOutcome.notAttempted),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
         if (hint != null)
           Padding(
-            padding: const EdgeInsets.only(top: 4),
+            padding: const EdgeInsets.only(top: TkSpace.xxs),
             child: Text(
               // Guardian-facing advisory copy only — never rendered as a
               // verdict, never near child-facing colour tokens.
-              "Sistem: mirip '${hint!.closestWord}'",
-              style: context.type.mono.copyWith(color: colors.neutralFeedback, fontSize: 11),
+              //
+              // All three numbers are shown together on purpose. A bare
+              // distance is unreadable without its threshold, and the IPA is
+              // the part that actually helps: it says *what* the model heard,
+              // so a guardian can tell "said it fine, mic clipped it" from
+              // "genuinely dropped the final consonant" — and overrule
+              // accordingly.
+              _hintLine(hint!),
+              textAlign: TextAlign.center,
+              style: context.type.caption.copyWith(color: colors.textMuted),
             ),
           ),
       ],
     );
+  }
+
+  /// True when the hint points at [outcome]. Null-safe by design: no hint
+  /// means nothing is suggested, which is the same state as the feature
+  /// being off — speak mode has one code path for both.
+  bool _suggests(TrialOutcome outcome) => hint?.suggestedOutcome == outcome;
+
+  String _hintLine(PronunciationHintResult result) {
+    if (result.predictedIpa.isEmpty) {
+      return 'Sistem: tidak ada bunyi yang terbaca';
+    }
+    return 'Sistem: /${result.predictedIpa}/ · '
+        'jarak ${result.distance} (toleransi ≤${result.tolerance})';
   }
 }
 
@@ -485,6 +686,7 @@ class _JudgeButton extends StatelessWidget {
     required this.color,
     required this.semanticLabel,
     required this.enabled,
+    required this.suggested,
     required this.onTap,
   });
 
@@ -492,21 +694,42 @@ class _JudgeButton extends StatelessWidget {
   final Color color;
   final String semanticLabel;
   final bool enabled;
+
+  /// The articulation model points at this button. A ring, nothing more —
+  /// see [_GuardianJudgeCluster]'s doc comment for the boundary.
+  final bool suggested;
+
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     return Semantics(
       button: true,
       label: semanticLabel,
+      // Announced, not just drawn. A guardian using a screen reader gets the
+      // same suggestion a sighted one does.
+      hint: suggested ? 'Disarankan sistem' : null,
       child: InkResponse(
         onTap: enabled ? onTap : null,
         radius: TemanKuMetrics.minTouchTarget / 2,
-        child: SizedBox(
+        child: Container(
           width: TemanKuMetrics.minTouchTarget,
           height: TemanKuMetrics.minTouchTarget,
-          child: Center(
-            child: Icon(icon, size: 22, color: enabled ? color : color.withValues(alpha: 0.4)),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            // info, not a feedback token — "the system is pointing here",
+            // not "this answer was correct". See the cluster's doc comment.
+            color: suggested ? c.info.withValues(alpha: 0.10) : null,
+            border: suggested
+                ? Border.all(color: c.info, width: TkStroke.regular)
+                : null,
+          ),
+          child: Icon(
+            icon,
+            size: 22,
+            color: enabled ? color : color.withValues(alpha: 0.4),
           ),
         ),
       ),

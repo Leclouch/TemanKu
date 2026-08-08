@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:temanku/audio/sound_service.dart';
 import 'package:temanku/core/service_locator.dart';
-import 'package:temanku/core/theme/temanku_theme.dart';
+import 'package:temanku/core/design/design.dart';
 import 'package:temanku/data/repositories/in_memory/in_memory_child_repository.dart';
 import 'package:temanku/features/guardian/child_settings_screen.dart';
 
@@ -36,8 +36,8 @@ class _FakeSoundService implements SoundService {
   Future<void> playSessionComplete() async {}
 }
 
-final _hintToggleFinder = find.widgetWithText(SwitchListTile, 'Saran pengucapan (eksperimental)');
-final _soundToggleFinder = find.widgetWithText(SwitchListTile, 'Efek suara');
+final _hintToggleFinder = find.widgetWithText(TkSwitchTile, 'Bantuan mode bicara (eksperimental)');
+final _soundToggleFinder = find.widgetWithText(TkSwitchTile, 'Efek suara');
 
 Widget _buildApp(String childId, InMemoryChildRepository repo, {SoundService? sound}) {
   return ProviderScope(
@@ -60,7 +60,7 @@ void main() {
     await tester.pumpWidget(_buildApp(child.id, repo));
     await tester.pumpAndSettle();
 
-    final tile = tester.widget<SwitchListTile>(_hintToggleFinder);
+    final tile = tester.widget<TkSwitchTile>(_hintToggleFinder);
     expect(tile.value, isFalse);
   });
 
@@ -83,7 +83,7 @@ void main() {
     await tester.tap(find.text('Batal'));
     await tester.pumpAndSettle();
 
-    final tile = tester.widget<SwitchListTile>(_hintToggleFinder);
+    final tile = tester.widget<TkSwitchTile>(_hintToggleFinder);
     expect(tile.value, isFalse);
     expect((await repo.getChild(child.id))!.pronunciationHintEnabled, isFalse);
   });
@@ -101,7 +101,7 @@ void main() {
     await tester.tap(find.text('Aktifkan'));
     await tester.pumpAndSettle();
 
-    final tile = tester.widget<SwitchListTile>(_hintToggleFinder);
+    final tile = tester.widget<TkSwitchTile>(_hintToggleFinder);
     expect(tile.value, isTrue);
     expect((await repo.getChild(child.id))!.pronunciationHintEnabled, isTrue);
   });
@@ -119,7 +119,7 @@ void main() {
 
     // No dialog appeared, so the tap took effect immediately.
     expect(find.text('Batal'), findsNothing);
-    final tile = tester.widget<SwitchListTile>(_hintToggleFinder);
+    final tile = tester.widget<TkSwitchTile>(_hintToggleFinder);
     expect(tile.value, isFalse);
     expect((await repo.getChild(child.id))!.pronunciationHintEnabled, isFalse);
   });
@@ -131,7 +131,7 @@ void main() {
     await tester.pumpWidget(_buildApp(child.id, repo));
     await tester.pumpAndSettle();
 
-    final tile = tester.widget<SwitchListTile>(_soundToggleFinder);
+    final tile = tester.widget<TkSwitchTile>(_soundToggleFinder);
     expect(tile.value, isTrue);
     expect(find.byType(Slider), findsOneWidget);
   });
@@ -150,7 +150,7 @@ void main() {
 
     expect(find.text('Batal'), findsNothing);
     expect(sound.isMuted, isTrue);
-    final tile = tester.widget<SwitchListTile>(_soundToggleFinder);
+    final tile = tester.widget<TkSwitchTile>(_soundToggleFinder);
     expect(tile.value, isFalse);
     expect(find.byType(Slider), findsNothing);
   });

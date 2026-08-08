@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:temanku/core/theme/temanku_theme.dart';
+import 'package:temanku/core/design/design.dart';
 import 'package:temanku/widgets/mascot.dart';
 
 Widget _wrap(Widget child) => MaterialApp(theme: TemanKuTheme.child, home: Center(child: child));
