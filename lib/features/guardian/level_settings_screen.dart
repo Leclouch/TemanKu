@@ -135,11 +135,16 @@ class _LevelSettingsScreenState extends ConsumerState<LevelSettingsScreen> {
                   style: context.type.body.copyWith(color: context.colors.text),
                 ),
                 const SizedBox(height: TkSpace.md),
-                for (var index = 0; index < _blocks.length; index++)
-                  _LevelBlockCard(
-                    block: _blocks[index],
-                    onSelected: (step) => _selectStep(index, step),
-                    onApply: () => _apply(index),
+                for (final module in ModuleId.values)
+                  _ModuleLevelDropdown(
+                    module: module,
+                    blocks: [
+                      for (var index = 0; index < _blocks.length; index++)
+                        if (_blocks[index].module == module)
+                          (index: index, block: _blocks[index]),
+                    ],
+                    onSelected: _selectStep,
+                    onApply: _apply,
                   ),
               ],
             ),
@@ -186,6 +191,54 @@ class _LevelBlockCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ModuleLevelDropdown extends StatelessWidget {
+  const _ModuleLevelDropdown({
+    required this.module,
+    required this.blocks,
+    required this.onSelected,
+    required this.onApply,
+  });
+
+  final ModuleId module;
+  final List<({int index, _LevelBlock block})> blocks;
+  final void Function(int blockIndex, int selectedIndex) onSelected;
+  final ValueChanged<int> onApply;
+
+  @override
+  Widget build(BuildContext context) {
+    if (blocks.isEmpty) return const SizedBox.shrink();
+    final definition = _definitionFor(module);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: TkSpace.sm),
+      child: TkCard(
+        child: Material(
+          color: Colors.transparent,
+          child: ExpansionTile(
+            title: Text(definition.displayName),
+            subtitle: const Text('Buka untuk memilih tahap.'),
+            children: [
+              for (final entry in blocks)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    TkSpace.sm,
+                    0,
+                    TkSpace.sm,
+                    TkSpace.sm,
+                  ),
+                  child: _LevelBlockCard(
+                    block: entry.block,
+                    onSelected: (step) => onSelected(entry.index, step),
+                    onApply: () => onApply(entry.index),
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }

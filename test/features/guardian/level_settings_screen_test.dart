@@ -31,6 +31,38 @@ Widget _buildApp({
 }
 
 void main() {
+  testWidgets('groups each module in a collapsed dropdown', (tester) async {
+    final repository = InMemoryChildRepository(seed: false);
+    final child = await repository.createChild(
+      name: 'Arif',
+      availableModes: {ResponseMode.tap},
+    );
+    final persistence = LadderPersistence(repository);
+    final tracker = AdvancementTracker(
+      dialEngine: const TwoDialEngine(),
+      persistence: persistence,
+    );
+
+    await tester.pumpWidget(
+      _buildApp(
+        childId: child.id,
+        repository: repository,
+        persistence: persistence,
+        tracker: tracker,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Makanan'), findsOneWidget);
+    expect(find.text('Keluarga'), findsOneWidget);
+    expect(find.text('Tahap 1'), findsNothing);
+
+    await tester.tap(find.text('Makanan'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Tahap 1'), findsOneWidget);
+  });
+
   testWidgets(
       'applying a different step persists it and clears only that block streak',
       (tester) async {
@@ -69,6 +101,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.tap(find.text('Makanan'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Tahap 2').first);
     await tester.ensureVisible(find.text('Terapkan').first);
     await tester.tap(find.text('Terapkan').first);
