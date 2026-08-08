@@ -43,8 +43,10 @@ import 'package:temanku/audio/sound_service.dart';
 import 'package:temanku/data/local/local_photo_repository.dart';
 import 'package:temanku/data/repositories/child_repository.dart';
 import 'package:temanku/data/repositories/in_memory/in_memory_child_repository.dart';
+import 'package:temanku/data/repositories/in_memory/in_memory_pronunciation_hint_log_repository.dart';
 import 'package:temanku/data/repositories/in_memory/in_memory_session_repository.dart';
 import 'package:temanku/data/repositories/photo_repository.dart';
+import 'package:temanku/data/repositories/pronunciation_hint_log_repository.dart';
 import 'package:temanku/data/repositories/session_repository.dart';
 import 'package:temanku/engine/advancement/advancement_policy.dart';
 import 'package:temanku/engine/advancement/advancement_tracker.dart';
@@ -91,6 +93,14 @@ final photoRepositoryProvider = Provider<PhotoRepository>((ref) {
   ref.onDispose(repo.dispose);
   return repo;
 });
+
+/// TODO(IT-2): replace with a Hive-backed implementation — local-only, same
+/// reasoning as [SessionRepository]'s trial logs (§11). Read by
+/// `features/guardian/pronunciation_hint_full_data.dart`, written by
+/// `features/child_session/speak_mode_screen.dart`'s `_requestHint`.
+final pronunciationHintLogRepositoryProvider = Provider<PronunciationHintLogRepository>(
+  (ref) => InMemoryPronunciationHintLogRepository(),
+);
 
 // ---------------------------------------------------------------------------
 // Swappable services (ADR-4) — fallbacks are the default

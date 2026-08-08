@@ -41,6 +41,7 @@ import 'package:temanku/core/service_locator.dart';
 import 'package:temanku/core/design/design.dart';
 import 'package:temanku/data/models/child.dart';
 import 'package:temanku/data/models/photo.dart';
+import 'package:temanku/data/models/pronunciation_hint_log.dart';
 import 'package:temanku/engine/modes/mode_controller.dart';
 import 'package:temanku/engine/modes/speak/speak_mode_controller.dart';
 import 'package:temanku/speech/audio/wav_clip.dart';
@@ -313,6 +314,25 @@ class _SpeakModeScreenState extends ConsumerState<SpeakModeScreen> {
     );
     if (!mounted || generation != _trialGeneration || result == null) return;
     setState(() => _hintResult = result);
+
+    // Persisted for the guardian's post-session "Data lengkap" experimental
+    // subsection only — this is the one and only line in this file that
+    // writes the result anywhere beyond the live [_hintResult] line above;
+    // it changes nothing about what's rendered here. Fire-and-forget, same
+    // "never block or fail the live trial" rule the hint request itself
+    // follows.
+    unawaited(
+      ref.read(pronunciationHintLogRepositoryProvider).append(
+            PronunciationHintLogEntry(
+              childId: widget.childId,
+              module: widget.module,
+              targetWord: targetWord,
+              predictedIpa: result.predictedIpa,
+              distance: result.distance,
+              recordedAt: DateTime.now(),
+            ),
+          ),
+    );
   }
 
   Future<void> _judge(TrialOutcome outcome) async {

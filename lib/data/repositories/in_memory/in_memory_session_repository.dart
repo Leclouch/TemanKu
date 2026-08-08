@@ -65,6 +65,120 @@ class InMemorySessionRepository implements SessionRepository {
         endedByDisengagement: true,
       ),
     ];
+
+    // Raw trial logs for the same two sessions — so
+    // `features/guardian/session_full_data.dart`'s "Data lengkap" view has
+    // real counts to render on day one too, same reasoning as the
+    // observations above. Local-only (§11) in a real implementation; kept
+    // here only because this fake's `_trialLogs` map already models that.
+    _trialLogs['session_seed_1'] = const [
+      TrialLog(
+        sessionId: 'session_seed_1',
+        outcome: TrialOutcome.correct,
+        latency: Duration(milliseconds: 1800),
+        hintShown: false,
+        targetSlot: 0,
+        responseSlot: 0,
+      ),
+      TrialLog(
+        sessionId: 'session_seed_1',
+        outcome: TrialOutcome.correct,
+        latency: Duration(milliseconds: 1500),
+        hintShown: false,
+        targetSlot: 2,
+        responseSlot: 2,
+      ),
+      TrialLog(
+        sessionId: 'session_seed_1',
+        outcome: TrialOutcome.correct,
+        latency: Duration(milliseconds: 2100),
+        hintShown: false,
+        targetSlot: 1,
+        responseSlot: 1,
+      ),
+      TrialLog(
+        sessionId: 'session_seed_1',
+        outcome: TrialOutcome.incorrect,
+        latency: Duration(milliseconds: 900),
+        hintShown: false,
+        targetSlot: 3,
+        responseSlot: 0,
+      ),
+      TrialLog(
+        sessionId: 'session_seed_1',
+        outcome: TrialOutcome.correct,
+        latency: Duration(milliseconds: 2600),
+        hintShown: true,
+        targetSlot: 0,
+        responseSlot: 0,
+      ),
+    ];
+    _trialLogs['session_seed_2'] = const [
+      TrialLog(
+        sessionId: 'session_seed_2',
+        outcome: TrialOutcome.correct,
+        latency: Duration(milliseconds: 1700),
+        hintShown: false,
+        targetSlot: 0,
+        responseSlot: 0,
+      ),
+      TrialLog(
+        sessionId: 'session_seed_2',
+        outcome: TrialOutcome.correct,
+        latency: Duration(milliseconds: 1600),
+        hintShown: false,
+        targetSlot: 1,
+        responseSlot: 1,
+      ),
+      TrialLog(
+        sessionId: 'session_seed_2',
+        outcome: TrialOutcome.correct,
+        latency: Duration(milliseconds: 1400),
+        hintShown: false,
+        targetSlot: 2,
+        responseSlot: 2,
+      ),
+      TrialLog(
+        sessionId: 'session_seed_2',
+        outcome: TrialOutcome.correct,
+        latency: Duration(milliseconds: 2000),
+        hintShown: false,
+        targetSlot: 0,
+        responseSlot: 0,
+      ),
+      TrialLog(
+        sessionId: 'session_seed_2',
+        outcome: TrialOutcome.correct,
+        latency: Duration(milliseconds: 1900),
+        hintShown: false,
+        targetSlot: 1,
+        responseSlot: 1,
+      ),
+      TrialLog(
+        sessionId: 'session_seed_2',
+        outcome: TrialOutcome.correct,
+        latency: Duration(milliseconds: 1300),
+        hintShown: false,
+        targetSlot: 2,
+        responseSlot: 2,
+      ),
+      TrialLog(
+        sessionId: 'session_seed_2',
+        outcome: TrialOutcome.incorrect,
+        latency: Duration(milliseconds: 1100),
+        hintShown: false,
+        targetSlot: 0,
+        responseSlot: 1,
+      ),
+      TrialLog(
+        sessionId: 'session_seed_2',
+        outcome: TrialOutcome.correct,
+        latency: Duration(milliseconds: 2400),
+        hintShown: true,
+        targetSlot: 1,
+        responseSlot: 1,
+      ),
+    ];
   }
 
   StreamController<List<SessionSummary>> _controllerFor(String childId) =>
