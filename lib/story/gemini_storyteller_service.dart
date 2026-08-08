@@ -1,10 +1,11 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 
 import 'package:http/http.dart' as http;
 
 import 'package:temanku/story/storyteller_service.dart';
 
-/// Calls the Claude API for a freshly-written story beat — **the one place
+/// Calls the Gemini API for a freshly-written story beat — **the one place
 /// in this file group that leaves the device.**
 ///
 /// Only ever constructed in `core/service_locator.dart`, and only when
@@ -13,17 +14,22 @@ import 'package:temanku/story/storyteller_service.dart';
 /// `features/guardian/child_settings_screen.dart`) and the running build was
 /// given a key. The key is never hardcoded and never typed into a settings
 /// screen — it's supplied at build/run time via
-/// `--dart-define=ANTHROPIC_API_KEY=...` (or
+/// `--dart-define=GEMINI_API_KEY=...` (or
 /// `--dart-define-from-file=secrets.json`, kept out of version control) and
 /// read with [String.fromEnvironment], the standard Flutter pattern for a
 /// compile-time secret that must never sit in source. `service_locator.dart`
 /// falls back to [NoStorytellerService] whenever that value is empty, so an
 /// unconfigured build is never one line away from an accidental network call.
 ///
-/// Model: `claude-haiku-4-5` — this is one short sentence of flavor text on
-/// a cheap, latency-sensitive path, not a reasoning task; Haiku is the
-/// documented fit for that shape of call. See the [SKILL.md claude-api
-/// reference] this was written against for the model table.
+/// Google has no official Dart SDK for the Gemini API, so this calls the
+/// `generateContent` REST endpoint directly rather than pulling in a wrapper
+/// package.
+///
+/// Model: `gemini-2.5-flash` — this is one short sentence of flavor text on
+/// a cheap, latency-sensitive path, not a reasoning task, so a fast/cheap
+/// tier model is the right fit. Google's model lineup moves independently of
+/// this codebase; re-check `_model` against the current Gemini catalog
+/// before relying on this in production.
 ///
 /// The system prompt is the actual safety mechanism here, not a formality —
 /// this app's own accessibility guidance (`core/design/tokens.dart`'s
@@ -31,17 +37,17 @@ import 'package:temanku/story/storyteller_service.dart';
 /// `features/onboarding/intake_screen.dart`) applies to LLM output exactly
 /// as much as to hand-written copy, and an LLM will reach for exactly the
 /// idiom/metaphor that guidance rules out unless explicitly told not to.
-class ClaudeStorytellerService implements StorytellerService {
-  ClaudeStorytellerService({required String apiKey, http.Client? client})
+class GeminiStorytellerService implements StorytellerService {
+  GeminiStorytellerService({required String apiKey, http.Client? client})
       : _apiKey = apiKey,
         _client = client ?? http.Client();
 
   final String _apiKey;
   final http.Client _client;
 
-  static const _endpoint = 'https://api.anthropic.com/v1/messages';
-  static const _model = 'claude-haiku-4-5';
-  static const _anthropicVersion = '2023-06-01';
+  static const _model = 'gemini-2.5-flash';
+  static const _endpoint =
+      'https://generativelanguage.googleapis.com/v1beta/models/$_model:generateContent';
 
   static const _systemPrompt = '''
 Kamu adalah maskot pendamping di aplikasi terapi wicara untuk anak SLB
@@ -76,32 +82,51 @@ Aturan wajib:
             Uri.parse(_endpoint),
             headers: {
               'content-type': 'application/json',
-              'x-api-key': _apiKey,
-              'anthropic-version': _anthropicVersion,
+              'x-goog-api-key': _apiKey,
             },
             body: jsonEncode({
-              'model': _model,
-              'max_tokens': 120,
-              'system': _systemPrompt,
-              'messages': [
-                {'role': 'user', 'content': prompt},
+              'systemInstruction': {
+                'parts': [
+                  {'text': _systemPrompt},
+                ],
+              },
+              'contents': [
+                {
+                  'role': 'user',
+                  'parts': [
+                    {'text': prompt},
+                  ],
+                },
               ],
+              'generationConfig': {'maxOutputTokens': 120},
             }),
           )
           .timeout(const Duration(seconds: 8));
 
-      if (response.statusCode != 200) return null;
+      if (response.statusCode != 200) {
+        // TEMP DEBUG — remove once the silent-failure is diagnosed.
+        developer.log(
+          'Gemini story beat failed: HTTP ${response.statusCode} ${response.body}',
+          name: 'GeminiStorytellerService',
+        );
+        return null;
+      }
 
       final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-      // Never index content[0] unconditionally (SKILL.md's own warning) —
-      // a refusal or an empty-content edge case both look like "no beats"
-      // to this line's null-is-silent contract, not a crash.
-      final content = decoded['content'] as List<dynamic>?;
-      if (content == null || content.isEmpty) return null;
-      final first = content.first as Map<String, dynamic>;
-      final text = first['text'] as String?;
+      // Never index candidates[0]/parts[0] unconditionally — a safety block
+      // (empty `candidates`) or a finish with no text both look like "no
+      // beats" to this line's null-is-silent contract, not a crash.
+      final candidates = decoded['candidates'] as List<dynamic>?;
+      if (candidates == null || candidates.isEmpty) return null;
+      final first = candidates.first as Map<String, dynamic>;
+      final content = first['content'] as Map<String, dynamic>?;
+      final parts = content?['parts'] as List<dynamic>?;
+      if (parts == null || parts.isEmpty) return null;
+      final text = (parts.first as Map<String, dynamic>)['text'] as String?;
       return (text == null || text.trim().isEmpty) ? null : text.trim();
-    } catch (_) {
+    } catch (e) {
+      // TEMP DEBUG — remove once the silent-failure is diagnosed.
+      developer.log('Gemini story beat threw: $e', name: 'GeminiStorytellerService');
       // Network error, timeout, malformed JSON — all collapse to "no beat
       // this time", the same null every other failure path returns. This
       // service must never throw into a child-facing screen.

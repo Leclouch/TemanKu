@@ -1,65 +1,110 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
+import 'package:temanku/core/design/asset_probe.dart';
 import 'package:temanku/core/design/design.dart';
 
-/// The four poses `referenceimages/instruksi-decor-icon-mascot.md` asks
-/// for: menyapa (greeting), memberi instruksi (pointing), merayakan jawaban
-/// benar (celebrating), mendorong coba lagi (encouraging). Each is a distinct
-/// silhouette (arm position + accent), not just a swapped face — the same
+extension on MascotPose {
+  /// `assets/mascot/mascot_<pose>.svg` — see `assets/mascot/README.md` for
+  /// how those get sourced (composed and recolored in Blush, unlike
+  /// `tk_decor.dart`'s assets this is never force-tinted, since a mascot
+  /// pose is multi-part and tinting it flat would erase the character).
+  String get _assetPath => switch (this) {
+        MascotPose.greeting => 'assets/mascot/mascot_greeting.svg',
+        MascotPose.pointing => 'assets/mascot/mascot_pointing.svg',
+        MascotPose.celebrating => 'assets/mascot/mascot_celebrating.svg',
+        MascotPose.standing => 'assets/mascot/mascot_standing.svg',
+      };
+}
+
+/// menyapa (greeting), memberi instruksi (pointing), merayakan jawaban benar
+/// (celebrating), and the character's resting pose (standing). Each is a
+/// distinct silhouette (arm position), not just a swapped face — the same
 /// "shape carries the meaning" rule `answer_target.dart` uses for category
 /// styles applies here too, since some readers of this character will be
 /// relying on shape over subtle expression.
-enum MascotPose { greeting, pointing, celebrating, encouraging }
+///
+/// [standing] does double duty: it's the idle pose between prompts, and it's
+/// also what plays for a "try again" moment — there is no separate
+/// discouraging/slumped pose. The reaction lives entirely in the jump
+/// [Mascot] plays on every pose *change* (see that class's doc comment), not
+/// in a different body: a wrong answer isn't a failure state here (§10/§12),
+/// so the character doesn't get sadder for it, it just hops and keeps
+/// standing.
+enum MascotPose { greeting, pointing, celebrating, standing }
 
-/// A small, flat-geometric mascot — **`day_arc_screen.dart` only.**
+/// A small, flat-geometric mascot — the child's companion on every level and
+/// mode screen sees, day-arc included.
 ///
-/// Built entirely from primitives ([RRect], circles, arcs, one blob body) —
-/// the same vocabulary `widgets/answer_target.dart`'s category-shape overlay
-/// and `core/design/components/tk_decor.dart`'s background shapes already
-/// use: a colour fill plus a contrasting overlay shape, painted in the
-/// background colour. No gradient, no outline stroke on the body, no image
-/// asset — everything here is drawn, not imported. See the redesign
-/// conversation for why: a hand-illustrated character at Maxima's level of
-/// craft is not something procedural shape code can match, so this stays in
-/// its own honest lane — a charming geometric character, not an attempt to
-/// fake an illustrator's line work.
+/// Built entirely from primitives ([RRect], circles, arcs, one blob body) as
+/// its fallback — the same vocabulary `widgets/answer_target.dart`'s
+/// category-shape overlay and `core/design/components/tk_decor.dart`'s
+/// background shapes already use: a colour fill plus a contrasting overlay
+/// shape, painted in the background colour. Real illustration (SVG, see
+/// `assets/mascot/README.md`) is preferred when present; the procedural
+/// painter only ever renders for a pose whose asset hasn't been dropped in
+/// yet — see [_MascotAssetOrFallback].
 ///
-/// Deliberately **not** reused on tap/match/speak: those are trial screens
-/// and keep their zero-decoration rule untouched. Day-arc is the calm
-/// "what's next" screen between trials, not a trial itself, which is the
-/// only reason this exists at all.
+/// Present on tap/match/speak as well as day-arc: the character reacts to
+/// each trial ([MascotPose.celebrating] on a correct answer, a jump back
+/// into [MascotPose.standing] on a try-again), so the child always has a
+/// companion on screen, not just between trials.
 ///
 /// Colour comes entirely from `core/design/` tokens, read once at build time
 /// — never a literal `Color(0x...)`. Only neutral chrome tokens are used
 /// ([TemanKuColors.primaryAccent], [TemanKuColors.background],
-/// [TemanKuColors.textMuted]).
+/// [TemanKuColors.textMuted]) for the procedural fallback.
 ///
-/// No feedback token appears here, deliberately: the mascot is on screen
-/// alongside the task, and a character painted in the same green or yellow
-/// the answer ring uses would read as commentary on the child's answer.
-/// [TemanKuColors.secondaryAccent] is likewise never touched — its own doc
-/// comment marks it guardian-surface-only, and day-arc is a child screen.
+/// No feedback token appears in the character's *colour*, deliberately: the
+/// mascot sits alongside the task, and a body painted in the same green or
+/// yellow the answer ring uses would read as commentary on the child's
+/// answer. Reaction is carried by which [MascotPose] is showing and the jump
+/// between poses, never by recolouring the character. [TemanKuColors.secondaryAccent]
+/// is likewise never touched — its own doc comment marks it guardian-surface-only.
 class Mascot extends StatelessWidget {
-  const Mascot({super.key, this.size = 96, this.pose = MascotPose.greeting, this.animate = true});
+  const Mascot({
+    super.key,
+    this.size = 96,
+    this.pose = MascotPose.standing,
+    this.animate = true,
+    this.reactionTick = 0,
+  });
 
-  /// Rendered small — 80–120px is the intended range; 96 is the default.
+  /// Rendered small-to-medium — 96–150px is the intended range (bigger on
+  /// day-arc, where it's the one focal decorative element; smaller on the
+  /// trial screens, which still keep most of the screen for the task); 96 is
+  /// the bare default for a caller that doesn't specify one. `TkChildScreen`
+  /// nudges its main content up slightly (see that class's own doc comment)
+  /// precisely so a mascot at this size has clear room in the corner without
+  /// touching the task above it.
   final double size;
 
   /// See [MascotPose] for what each value means and when it's used.
   final MascotPose pose;
 
-  /// A single, subtle fade + scale-in the first time this mounts. Never a
-  /// repeating idle animation (blink, bob, wiggle) — this character must
-  /// never compete with or distract from the task content around it. Pass
-  /// `false` for a fully static pose with no motion at all.
+  /// A subtle fade + scale + jump, played once on mount and again every time
+  /// [pose] or [reactionTick] *changes* — never a repeating/looping idle
+  /// animation (blink, bob, wiggle): it only ever fires on an actual
+  /// transition, then settles and stops. This character must never compete
+  /// with or distract from the task content around it. Pass `false` for a
+  /// fully static pose with no motion at all.
   final bool animate;
+
+  /// Bump this to replay the jump even when the target [pose] is unchanged
+  /// from the last build — the case a plain pose-change key can't cover.
+  /// A wrong answer keeps the mascot in [MascotPose.standing] (§10/§12: no
+  /// separate discouraged pose), so without this the second, third, ... "try
+  /// again" in a row would land on an identical `(pose)` key and play no
+  /// animation at all. Callers increment an int per trial judged; the exact
+  /// value never matters, only that it differs from the previous build's.
+  final int reactionTick;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final painted = CustomPaint(
+    final procedural = CustomPaint(
       size: Size.square(size),
       painter: _MascotPainter(
         pose: pose,
@@ -69,6 +114,10 @@ class Mascot extends StatelessWidget {
         accent: colors.neutralFeedback,
       ),
     );
+    final painted = SizedBox.square(
+      dimension: size,
+      child: _MascotAssetOrFallback(path: pose._assetPath, fallback: procedural),
+    );
 
     // `animate: false` is the caller's opt-out; `context.reduceMotion` is the
     // platform's, and it wins unconditionally. Motion control is a stated
@@ -77,18 +126,54 @@ class Mascot extends StatelessWidget {
     // have turned the setting off for.
     if (!animate || context.reduceMotion) return painted;
 
-    // One-shot, not looping: TweenAnimationBuilder animates once from its
-    // initial build to the target and then simply stops — there is no
-    // controller here to ever repeat() or reverse().
+    // Keyed on `(pose, reactionTick)`: either changing tears down this
+    // element and builds a fresh `TweenAnimationBuilder` in its place, which
+    // restarts the tween from `begin` — the mechanism that makes the jump
+    // replay on every transition (or every bumped [reactionTick], for a
+    // same-pose repeat), not just the first mount. When neither changes
+    // between builds, nothing here re-keys, so a same-pose, same-tick
+    // rebuild plays no animation at all. One-shot per transition, not
+    // looping: each build of this widget animates once from its start to its
+    // target and then simply stops — there is no controller here to ever
+    // repeat() or reverse().
     return TweenAnimationBuilder<double>(
+      key: ValueKey((pose, reactionTick)),
       tween: Tween(begin: 0, end: 1),
       duration: TkMotion.slow,
       curve: TkMotion.enter,
-      builder: (context, t, child) => Opacity(
-        opacity: t,
-        child: Transform.scale(scale: 0.94 + (0.06 * t), child: child),
-      ),
+      builder: (context, t, child) {
+        // A small hop, not a bounce loop: sin(πt) rises from 0 to a single
+        // peak at the animation's midpoint and back to 0 at its end, so the
+        // character lands exactly on the ground both before and after —
+        // never mid-air when the animation settles.
+        final jump = size * 0.09 * math.sin(math.pi * t);
+        return Opacity(
+          opacity: t,
+          child: Transform.translate(
+            offset: Offset(0, -jump),
+            child: Transform.scale(scale: 0.94 + (0.06 * t), child: child),
+          ),
+        );
+      },
       child: painted,
+    );
+  }
+}
+
+class _MascotAssetOrFallback extends StatelessWidget {
+  const _MascotAssetOrFallback({required this.path, required this.fallback});
+
+  final String path;
+  final Widget fallback;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<bool>(
+      future: tkAssetExists(path),
+      builder: (context, snapshot) {
+        if (snapshot.data != true) return fallback;
+        return SvgPicture.asset(path, fit: BoxFit.contain);
+      },
     );
   }
 }
@@ -143,16 +228,6 @@ class _MascotPainter extends CustomPainter {
         ? Rect.fromLTWH(s * 0.08, s * 0.04, s * 0.84, s * 0.80)
         : Rect.fromLTWH(s * 0.08, s * 0.10, s * 0.84, s * 0.80);
 
-    // Encouraging tilts the whole body a few degrees — a gentle head-tilt
-    // reads as warmth without needing a different face.
-    final tilt = pose == MascotPose.encouraging ? -0.06 : 0.0;
-    canvas.save();
-    if (tilt != 0) {
-      canvas.translate(bodyRect.center.dx, bodyRect.center.dy);
-      canvas.rotate(tilt);
-      canvas.translate(-bodyRect.center.dx, -bodyRect.center.dy);
-    }
-
     _paintArms(canvas, size, bodyPaint);
 
     // Body — one rounded rect, corners rounded past a "card" radius and
@@ -164,7 +239,6 @@ class _MascotPainter extends CustomPainter {
     );
 
     _paintFace(canvas, size, facePaint, bodyRect);
-    canvas.restore();
 
     if (pose == MascotPose.celebrating) {
       _paintSparkles(canvas, size);
@@ -190,10 +264,11 @@ class _MascotPainter extends CustomPainter {
         // without relying on a facial expression at all.
         _drawLimb(canvas, paint, s, start: Offset(s * 0.78, s * 0.36), angle: -1.15, length: s * 0.32);
         _drawLimb(canvas, paint, s, start: Offset(s * 0.22, s * 0.36), angle: -2.0, length: s * 0.32);
-      case MascotPose.encouraging:
-        // A single small raised arm, thumb-up height, not a full wave —
-        // quieter than `greeting`, paired with the body tilt for warmth.
-        _drawLimb(canvas, paint, s, start: Offset(s * 0.78, s * 0.50), angle: -0.6, length: s * 0.22);
+      case MascotPose.standing:
+        // No raised limb at all — arms stay at rest against the body. This
+        // is the idle silhouette; the only "reaction" the pose ever gets is
+        // the jump `Mascot` plays when it's switched into, not a gesture.
+        break;
     }
   }
 

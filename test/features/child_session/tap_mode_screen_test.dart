@@ -15,6 +15,8 @@ import 'package:temanku/engine/ladder_persistence.dart';
 import 'package:temanku/features/child_session/tap_mode_screen.dart';
 import 'package:temanku/widgets/answer_target.dart';
 import 'package:temanku/widgets/exit_dot.dart';
+import 'package:temanku/widgets/mastery_closure_prompt.dart';
+import 'package:temanku/widgets/photo_image.dart';
 
 const _childId = 'child_1';
 const _module = ModuleId.makanan;
@@ -128,10 +130,46 @@ void main() {
 
     // LadderPosition.start() → arraySize 2 → exactly the two seeded photos,
     // one target-category item and one distractor-category item.
-    expect(find.byType(AnswerTarget), findsNWidgets(2));
+    expect(find.byType(PhotoImage), findsNWidgets(2));
     expect(find.text('target_item'), findsOneWidget);
     expect(find.text('distractor_item'), findsOneWidget);
     expect(find.textContaining('tunjuk'), findsOneWidget);
+  });
+
+  testWidgets(
+      'the target and distractor answer cards render with identical chrome — no colour or '
+      'shape gives the answer away before the child looks at the photo', (tester) async {
+    final childRepo = InMemoryChildRepository(seed: false);
+    await childRepo.createChild(name: 'Arif', availableModes: {ResponseMode.tap});
+    final photoRepo = _seedPhotos();
+
+    await tester.pumpWidget(_buildDirectApp(childRepo: childRepo, photoRepo: photoRepo));
+    await tester.pumpAndSettle();
+
+    // AnswerTarget is `match_mode_screen.dart`'s zone widget — it paints
+    // `ModuleDefinition.targetStyle`/`distractorStyle` colour+shape, which is
+    // correct for a drop zone (the zone *is* the category label) but was a
+    // giveaway here, where the tapped card itself is the answer. Its absence
+    // is the direct regression guard for that fix — see `_AnswerItem`'s own
+    // doc comment in `tap_mode_screen.dart`.
+    expect(find.byType(AnswerTarget), findsNothing);
+
+    Color? fillColorFor(String label) {
+      final container = tester
+          .widgetList<Container>(
+            find.descendant(of: _answerItemFor(label), matching: find.byType(Container)),
+          )
+          .firstWhere((c) => c.decoration is BoxDecoration && (c.decoration! as BoxDecoration).color != null);
+      return ((container.decoration!) as BoxDecoration).color;
+    }
+
+    final targetFill = fillColorFor('target_item');
+    final distractorFill = fillColorFor('distractor_item');
+    expect(targetFill, isNotNull);
+    // The whole point: the target photo's card and the distractor photo's
+    // card are painted in exactly the same colour, so a child can't tell
+    // them apart without looking at the photo itself.
+    expect(targetFill, equals(distractorFill));
   });
 
   testWidgets('tapping the target item advances the streak and composes a new trial',
@@ -155,7 +193,7 @@ void main() {
     expect(tracker.streakFor(childId: _childId, module: _module, mode: ResponseMode.tap), 1);
     // A new trial composed from the same two-photo library — still exactly
     // one tappable target per item.
-    expect(find.byType(AnswerTarget), findsNWidgets(2));
+    expect(find.byType(PhotoImage), findsNWidgets(2));
   });
 
   testWidgets('tapping the distractor item does not advance the streak', (tester) async {
@@ -297,6 +335,64 @@ void main() {
     // never a new screen.
     expect(find.text('Lanjutkan'), findsNothing);
     expect(find.byType(TapModeScreen), findsOneWidget);
-    expect(find.byType(AnswerTarget), findsNWidgets(4));
+    expect(find.byType(PhotoImage), findsNWidgets(4));
+  });
+
+  testWidgets(
+      'a natural-pause prompt fires every naturalPauseTrialInterval trials even when the '
+      'child never reaches the dial engine\'s ceiling, and Selesai ends the session',
+      (tester) async {
+    final childRepo = InMemoryChildRepository(seed: false);
+    await childRepo.createChild(name: 'Arif', availableModes: {ResponseMode.tap});
+    // Only two photos → arraySize can never grow past 2, and every tap below
+    // is on the distractor, so the streak never clears and the position
+    // never moves off `LadderPosition.start()` — nowhere near the ceiling,
+    // by construction. If a closure prompt still appears, it can only be
+    // the periodic one, not `showMasteryClosurePrompt`.
+    final photoRepo = _seedPhotos();
+
+    final router = GoRouter(
+      initialLocation: Routes.guardianFor(_childId),
+      routes: [
+        GoRoute(path: Routes.guardianHome, builder: (context, state) => const Text('guardian-home')),
+        GoRoute(
+          path: '/tap',
+          builder: (context, state) => const TapModeScreen(childId: _childId, module: _module),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          childRepositoryProvider.overrideWithValue(childRepo),
+          photoRepositoryProvider.overrideWithValue(photoRepo),
+        ],
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
+    router.push('/tap');
+    await tester.pumpAndSettle();
+
+    for (var i = 0; i < naturalPauseTrialInterval - 1; i++) {
+      await tester.tap(_answerItemFor('distractor_item'));
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pumpAndSettle();
+      expect(find.text('Titik berhenti alami'), findsNothing);
+    }
+
+    await tester.tap(_answerItemFor('distractor_item'));
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Titik berhenti alami'), findsOneWidget);
+    expect(find.text('Lanjutkan'), findsOneWidget);
+    expect(find.text('Selesai'), findsOneWidget);
+
+    await tester.tap(find.text('Selesai'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('guardian-home'), findsOneWidget);
   });
 }

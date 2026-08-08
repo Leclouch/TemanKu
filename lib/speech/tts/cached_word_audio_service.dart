@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 import 'dart:typed_data';
 
 import 'package:audioplayers/audioplayers.dart';
@@ -88,15 +89,48 @@ class CachedWordAudioService implements WordAudioService {
       final player = _ensurePlayer();
       await player.stop();
       await player.setVolume(_sound.volume);
-      await player.play(BytesSource(bytes, mimeType: 'audio/mpeg'));
 
-      // The await that makes the ordering guarantee real. `onPlayerComplete`
-      // fires once playback ends; the timeout is a backstop so a platform
-      // that never delivers the event cannot strand the trial waiting to
-      // start listening.
-      await player.onPlayerComplete.first.timeout(
-        _playbackCeiling,
-        onTimeout: () {},
+      // Not just `await player.onPlayerComplete.first` — on a reused player,
+      // a "Dengar lagi" replay tapped soon after the previous word calls
+      // `stop()` on a player the native side may still be tearing down from
+      // the prior play, and some platforms have been observed to emit a
+      // stray/near-immediate completion event for the *new* play() call
+      // before it has actually produced audible sound (the exact bug this
+      // was reported as: the replay's completion — and therefore the switch
+      // to listening — arrives before the word is heard). Requiring an
+      // observed [PlayerState.playing] transition *for this call* before a
+      // [PlayerState.completed] is accepted closes that race: a stray event
+      // arriving before real playback started is ignored rather than ending
+      // the wait early.
+      final stopwatch = Stopwatch()..start();
+      final completer = Completer<void>();
+      var sawPlaying = false;
+      final subscription = player.onPlayerStateChanged.listen((state) {
+        if (state == PlayerState.playing) {
+          sawPlaying = true;
+        } else if (state == PlayerState.completed && sawPlaying && !completer.isCompleted) {
+          completer.complete();
+        }
+      });
+
+      try {
+        await player.play(BytesSource(bytes, mimeType: 'audio/mpeg'));
+
+        // The await that makes the ordering guarantee real. The timeout is a
+        // backstop so a platform that never delivers the events above cannot
+        // strand the trial waiting to start listening.
+        await completer.future.timeout(_playbackCeiling, onTimeout: () {});
+      } finally {
+        await subscription.cancel();
+      }
+
+      // TEMP DEBUG — remove once the premature-completion report is
+      // confirmed fixed. A genuine spoken word is not tens of milliseconds;
+      // this line is the evidence to check if the bug resurfaces.
+      developer.log(
+        'speak("$word") settled after ${stopwatch.elapsedMilliseconds}ms '
+        '(sawPlaying=$sawPlaying)',
+        name: 'CachedWordAudioService',
       );
       return true;
     } catch (_) {

@@ -29,6 +29,15 @@ String modeLabel(ResponseMode mode) => switch (mode) {
       ResponseMode.speak => 'ucap',
     };
 
+/// Bahasa label for [SessionOutcome] — the Riwayat status badge
+/// (`guardian_home_placeholder.dart`'s `_SessionRow`). Status only, never
+/// folded into [buildSessionRecap]'s prose: the recap sentence describes
+/// what happened during the session; this says how it ended.
+String sessionOutcomeLabel(SessionOutcome outcome) => switch (outcome) {
+      SessionOutcome.completed => 'Selesai',
+      SessionOutcome.endedEarly => 'Berhenti di tengah',
+    };
+
 /// "Sedang berlatih dengan {module's own similarity-tier copy}." — used only
 /// when a session has no recorded [SessionSummary.observations], so the
 /// sentence still says something dial-specific rather than going blank.

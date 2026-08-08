@@ -12,7 +12,7 @@ import 'package:temanku/story/storyteller_service.dart';
 /// implementation of the same contract. A handful of hand-written templates,
 /// picked deterministically from ([StoryContext.childName], the module, and
 /// the tier), give the day-arc screen genuine varied flavor text with zero
-/// setup. Swapping in `ClaudeStorytellerService` later makes the line fresh
+/// setup. Swapping in `GeminiStorytellerService` later makes the line fresh
 /// per session instead of fixed per (child, module, tier) — a richer version
 /// of the same feature, not a different one.
 class NoStorytellerService implements StorytellerService {

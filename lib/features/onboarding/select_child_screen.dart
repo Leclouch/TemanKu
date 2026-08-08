@@ -42,24 +42,36 @@ class SelectChildScreen extends ConsumerWidget {
           if (!snapshot.hasData) return const TkLoading(label: 'Memuat profil…');
 
           final children = snapshot.data!;
-          if (children.isEmpty) {
-            return const TkEmptyState(
-              message: 'Belum ada profil anak.',
-              icon: LucideIcons.user,
-            );
-          }
 
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              for (final child in children)
-                _ChildCard(
-                  child: child,
-                  onOpen: () {
-                    ref.read(selectedChildIdProvider.notifier).state = child.id;
-                    context.push(Routes.sessionFor(child.id));
-                  },
-                ),
+              if (children.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.only(bottom: TkSpace.sm),
+                  child: TkEmptyState(
+                    message: 'Belum ada profil anak.',
+                    icon: LucideIcons.user,
+                  ),
+                )
+              else
+                for (final child in children)
+                  _ChildCard(
+                    child: child,
+                    onOpen: () {
+                      ref.read(selectedChildIdProvider.notifier).state = child.id;
+                      context.push(Routes.sessionFor(child.id));
+                    },
+                  ),
+              // Two future-scope slots, shown inline rather than hidden — same
+              // "full intended scope visible in the normal flow" treatment
+              // `guardian_home_placeholder.dart`'s "Modul" card gives its four
+              // not-yet-built modules, and shown even with zero real profiles
+              // above so the scope reads the same either way. Dimmed, badged,
+              // never a real profile: tapping surfaces a calm message and
+              // nothing else, exactly like that card's placeholder tiles.
+              const _PlaceholderChildCard(label: 'Anak baru'),
+              const _PlaceholderChildCard(label: 'Anak baru'),
             ],
           );
         },
@@ -153,6 +165,36 @@ class _ChildCard extends StatelessWidget {
         ResponseMode.match => LucideIcons.puzzle,
         ResponseMode.speak => LucideIcons.micVocal,
       };
+}
+
+/// A not-yet-real child slot — same card shape as [_ChildCard] so it reads
+/// as one consistent list, dimmed to 0.5 opacity (the same treatment
+/// `day_arc_screen.dart`'s `_ModuleCard` uses for its own "nothing behind
+/// this yet" state) with a "Belum tersedia" badge standing in for the
+/// chevron a real card ends on. Tapping never opens a session or navigates
+/// anywhere — only a calm snackbar, the same inert-tap contract
+/// `guardian_home_placeholder.dart`'s `_PlaceholderModuleTile` uses for its
+/// own future-scope rows.
+class _PlaceholderChildCard extends StatelessWidget {
+  const _PlaceholderChildCard({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: 0.5,
+      child: TkCard(
+        title: label,
+        leading: const _Avatar(name: '?'),
+        trailing: const TkBadge(label: 'Belum tersedia'),
+        onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Profil anak ini belum tersedia')),
+        ),
+        child: const SizedBox.shrink(),
+      ),
+    );
+  }
 }
 
 /// The child's initial on a tinted plate.

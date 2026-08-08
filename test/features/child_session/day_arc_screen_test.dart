@@ -82,6 +82,41 @@ void main() {
     expect(kantinY, lessThan(rumahY));
   });
 
+  testWidgets(
+      'shows the four planned modules as dimmed cards below the two real doorways, '
+      'each with no tap target at all', (tester) async {
+    final childRepo = InMemoryChildRepository(seed: false);
+    final child = await childRepo.createChild(name: 'Sari', availableModes: {ResponseMode.tap});
+
+    await tester.pumpWidget(_buildApp(childRepo, child.id));
+    await tester.pumpAndSettle();
+
+    const plannedLabels = [
+      'Uang',
+      'Sampah',
+      'Pengenalan Keamanan',
+      'Pengenalan Orang Terpercaya',
+    ];
+    for (final label in plannedLabels) {
+      expect(find.text(label), findsOneWidget);
+    }
+    // "Belum tersedia" appears once per planned card — never a badge object,
+    // just the same caption-role text repeated (see `_PlaceholderModuleCard`).
+    expect(find.text('Belum tersedia'), findsNWidgets(plannedLabels.length));
+
+    // Unlike `_ModuleCard` (which stays wrapped in an `InkWell` even while
+    // dimmed, since intake completion can make it tappable later), a planned
+    // module never gets one — there is nothing behind it, ever, on this
+    // screen. See `_PlaceholderModuleCard`'s own doc comment.
+    for (final label in plannedLabels) {
+      final ancestorInkWell = find.ancestor(
+        of: find.text(label),
+        matching: find.byType(InkWell),
+      );
+      expect(ancestorInkWell, findsNothing);
+    }
+  });
+
   testWidgets('a child with only tap enabled routes into tap mode for Makanan', (tester) async {
     final childRepo = InMemoryChildRepository(seed: false);
     final child = await childRepo.createChild(name: 'Arif', availableModes: {ResponseMode.tap});

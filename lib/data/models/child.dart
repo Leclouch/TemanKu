@@ -20,6 +20,7 @@ class Child {
     this.diagnosisStatus,
     this.pronunciationHintEnabled = false,
     this.storytellerEnabled = false,
+    this.levelIndicatorEnabled = false,
   });
 
   final String id;
@@ -61,12 +62,30 @@ class Child {
   /// is never shown anywhere the guardian's own judgment belongs.
   final bool storytellerEnabled;
 
+  /// Guardian-only debug/preview toggle (`features/guardian/child_settings_screen.dart`):
+  /// when true, `TapModeScreen`/`MatchModeScreen` render a small, neutral
+  /// [LevelIndicatorBadge] in the bottom-right corner showing the child's
+  /// current ladder position. Default **off**.
+  ///
+  /// This is a deliberate, explicit exception to §4.5's "nothing about
+  /// levels, scores, or thresholds is ever visible to the child" — there is
+  /// no separate "guardian view" of an active session distinct from what the
+  /// child sees on the same device, so turning this on does make the ladder
+  /// position visible on-screen, full stop. It exists strictly as a
+  /// guardian-controlled QA/debug aid (checking the engine is progressing as
+  /// expected), not a feature aimed at the child, and it carries no privacy
+  /// consequence the way [pronunciationHintEnabled]/[storytellerEnabled] do
+  /// — nothing leaves the device — so it needs no consent dialog, just a
+  /// plain switch.
+  final bool levelIndicatorEnabled;
+
   Child copyWith({
     String? name,
     Set<ResponseMode>? availableModes,
     DiagnosisStatus? diagnosisStatus,
     bool? pronunciationHintEnabled,
     bool? storytellerEnabled,
+    bool? levelIndicatorEnabled,
   }) =>
       Child(
         id: id,
@@ -75,6 +94,7 @@ class Child {
         diagnosisStatus: diagnosisStatus ?? this.diagnosisStatus,
         pronunciationHintEnabled: pronunciationHintEnabled ?? this.pronunciationHintEnabled,
         storytellerEnabled: storytellerEnabled ?? this.storytellerEnabled,
+        levelIndicatorEnabled: levelIndicatorEnabled ?? this.levelIndicatorEnabled,
       );
 }
 

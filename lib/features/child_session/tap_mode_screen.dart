@@ -25,9 +25,11 @@ import 'package:temanku/core/design/design.dart';
 import 'package:temanku/core/service_locator.dart';
 import 'package:temanku/data/models/child.dart';
 import 'package:temanku/data/models/photo.dart';
+import 'package:temanku/data/models/session.dart';
 import 'package:temanku/engine/modes/mode_controller.dart';
 import 'package:temanku/engine/modes/tap/tap_mode_controller.dart';
-import 'package:temanku/widgets/answer_target.dart';
+import 'package:temanku/widgets/level_indicator_badge.dart';
+import 'package:temanku/widgets/mascot.dart';
 import 'package:temanku/widgets/mastery_closure_prompt.dart';
 import 'package:temanku/widgets/photo_image.dart';
 
@@ -61,6 +63,42 @@ class _TapModeScreenState extends ConsumerState<TapModeScreen> {
   bool _loading = true;
   String? _setupError;
 
+  /// Riwayat wiring — see [_endSession]. Null until [_bootstrap] has loaded a
+  /// starting position; [_endSession] no-ops on a guardian exit that lands
+  /// before that (loading screen, setup-error notice), since nothing worth
+  /// recording happened yet.
+  Session? _session;
+  DateTime? _sessionStart;
+  LadderPosition _position = const LadderPosition.start();
+
+  /// Guardian-only debug/preview flag (`Child.levelIndicatorEnabled`) — see
+  /// that field's own doc comment. Loaded once in [_bootstrap]; false until
+  /// then, same as every other field this screen only knows after loading.
+  bool _levelIndicatorEnabled = false;
+
+  /// True once the dial engine's ceiling was reached at least once this
+  /// session — sticky for the rest of the session even if the guardian
+  /// chooses "Lanjutkan" and keeps playing, so a later quiet exit still
+  /// records [SessionOutcome.completed] rather than losing that fact.
+  bool _reachedCeiling = false;
+
+  /// Trials completed since the last closure prompt (mastery- or
+  /// interval-triggered) — reset whenever either one fires and the guardian
+  /// chooses "Lanjutkan". Drives [showNaturalPausePrompt] independently of
+  /// [_reachedCeiling]: see that function's own doc comment for why a
+  /// session needs a way to reach a natural pause without ever reaching the
+  /// dial engine's ceiling.
+  int _trialsSinceLastPause = 0;
+
+  /// The mascot's live pose — resting between taps, a beat of
+  /// [MascotPose.celebrating] on a correct answer, then back to
+  /// [MascotPose.standing]. See [Mascot.reactionTick]'s own doc comment for
+  /// why [_mascotReactionTick] exists alongside [_mascotPose]: a "try again"
+  /// keeps the pose at `standing`, so the tick is what makes the jump replay
+  /// on a second consecutive miss.
+  MascotPose _mascotPose = MascotPose.standing;
+  int _mascotReactionTick = 0;
+
   @override
   void initState() {
     super.initState();
@@ -81,11 +119,48 @@ class _TapModeScreenState extends ConsumerState<TapModeScreen> {
           module: widget.module,
           mode: ResponseMode.tap,
         );
+    _position = position;
+    // Null only if the child was deleted mid-session (rare); the badge
+    // simply stays off rather than this screen failing to load over it.
+    final child = await ref.read(childRepositoryProvider).getChild(widget.childId);
+    _levelIndicatorEnabled = child?.levelIndicatorEnabled ?? false;
+    _session = await ref.read(sessionRepositoryProvider).startSession(
+          childId: widget.childId,
+          module: widget.module,
+          mode: ResponseMode.tap,
+        );
+    _sessionStart = DateTime.now();
     _photos = await ref.read(photoRepositoryProvider).listPhotos(
           childId: widget.childId,
           module: widget.module,
         );
     await _composeTrial(position);
+  }
+
+  /// Persists whatever happened this session to Riwayat — the one call site
+  /// missing before this file existed with a session repository at all (see
+  /// `data/repositories/session_repository.dart`'s own doc comment). Fire-
+  /// and-forget from both call sites (same reasoning as the sound-effect
+  /// calls elsewhere in this file): a guardian's exit must never wait on a
+  /// write completing.
+  Future<void> _endSession(SessionOutcome outcome) async {
+    final session = _session;
+    final start = _sessionStart;
+    if (session == null || start == null) return;
+    await ref.read(sessionRepositoryProvider).endSession(
+          sessionId: session.id,
+          summary: SessionSummary(
+            sessionId: session.id,
+            childId: widget.childId,
+            module: widget.module,
+            mode: ResponseMode.tap,
+            duration: DateTime.now().difference(start),
+            endedAt: DateTime.now(),
+            ladderAtEnd: _position,
+            observations: const [],
+            outcome: outcome,
+          ),
+        );
   }
 
   Future<void> _composeTrial(LadderPosition position) async {
@@ -101,6 +176,7 @@ class _TapModeScreenState extends ConsumerState<TapModeScreen> {
       if (!mounted) return;
       setState(() {
         _trial = trial;
+        _position = position;
         _flash = null;
         _resolving = false;
         _recentTargetSlots = [trial.targetSlot, ..._recentTargetSlots].take(2).toList();
@@ -128,6 +204,12 @@ class _TapModeScreenState extends ConsumerState<TapModeScreen> {
     setState(() {
       _resolving = true;
       _flash = (slot: itemSlot, correct: correct);
+      // Celebrating pops in on a correct answer; a miss stays in `standing`
+      // but still bumps the tick so the jump replays (see that field's own
+      // doc comment). Reset to `standing` after the feedback hold below, so
+      // the celebration is a beat, not a held pose.
+      _mascotPose = correct ? MascotPose.celebrating : MascotPose.standing;
+      _mascotReactionTick++;
     });
     // Same trigger point as the flash above, alongside it rather than
     // replacing it — fire-and-forget so a slow/failing sound never delays
@@ -153,11 +235,26 @@ class _TapModeScreenState extends ConsumerState<TapModeScreen> {
     // match mode's settle animation.
     await Future.delayed(TkMotion.feedbackHold);
     if (!mounted) return;
+    if (_mascotPose == MascotPose.celebrating) {
+      setState(() => _mascotPose = MascotPose.standing);
+    }
 
     if (result.masteredAtCeiling) {
+      _reachedCeiling = true;
+      _trialsSinceLastPause = 0;
       final shouldContinue = await showMasteryClosurePrompt(context, ref);
       if (!mounted) return;
       if (!shouldContinue) {
+        unawaited(_endSession(SessionOutcome.completed));
+        context.pop();
+        return;
+      }
+    } else if (++_trialsSinceLastPause >= naturalPauseTrialInterval) {
+      _trialsSinceLastPause = 0;
+      final shouldContinue = await showNaturalPausePrompt(context, ref);
+      if (!mounted) return;
+      if (!shouldContinue) {
+        unawaited(_endSession(SessionOutcome.completed));
         context.pop();
         return;
       }
@@ -171,7 +268,15 @@ class _TapModeScreenState extends ConsumerState<TapModeScreen> {
     // the bounded content column and the fixed centred task position — the
     // four things every child screen used to re-declare for itself.
     return TkChildScreen(
-      onExit: () => context.pop(),
+      onExit: () {
+        // A quiet exit after the ceiling was already reached this session
+        // (guardian chose "Lanjutkan" earlier, then stopped later) still
+        // counts as completed — see [_reachedCeiling]'s own doc comment.
+        unawaited(_endSession(_reachedCeiling ? SessionOutcome.completed : SessionOutcome.endedEarly));
+        context.pop();
+      },
+      corner: Mascot(size: 128, pose: _mascotPose, reactionTick: _mascotReactionTick),
+      debugBadge: _levelIndicatorEnabled ? LevelIndicatorBadge(position: _position) : null,
       child: Builder(builder: _buildBody),
     );
   }
@@ -195,7 +300,6 @@ class _TapModeScreenState extends ConsumerState<TapModeScreen> {
         const SizedBox(height: TkSpace.xxl),
         _AnswerRow(
           trial: trial,
-          definition: _definitionFor(widget.module),
           flash: _flash,
           onTap: _handleTap,
         ),
@@ -207,13 +311,11 @@ class _TapModeScreenState extends ConsumerState<TapModeScreen> {
 class _AnswerRow extends StatelessWidget {
   const _AnswerRow({
     required this.trial,
-    required this.definition,
     required this.flash,
     required this.onTap,
   });
 
   final Trial trial;
-  final ModuleDefinition definition;
   final ({int slot, bool correct})? flash;
   final void Function(int itemSlot) onTap;
 
@@ -227,7 +329,6 @@ class _AnswerRow extends StatelessWidget {
         for (var slot = 0; slot < trial.items.length; slot++)
           _AnswerItem(
             photo: trial.items[slot],
-            definition: definition,
             flashCorrect: flash != null && flash!.slot == slot ? flash!.correct : null,
             onTap: () => onTap(slot),
           ),
@@ -236,26 +337,33 @@ class _AnswerRow extends StatelessWidget {
   }
 }
 
-/// One tappable slot. Shows the category's colour+shape (never colour
-/// alone, §12) plus the actual photo via [PhotoImage] — same shared
-/// component `match_mode_screen.dart`'s item card uses.
+/// One tappable slot. Deliberately **neutral chrome, no category colour or
+/// shape** — unlike `match_mode_screen.dart`'s `_Zone` (which legitimately
+/// paints [ModuleDefinition.targetStyle]/`distractorStyle`, since a drop
+/// zone *is* the category label). Tap mode has no separate zone: the item
+/// card the child taps is itself the answer, so painting it in the target
+/// category's colour+shape would hand the answer to the child through the
+/// card's chrome before they ever look at the photo — the same failure mode
+/// `match_mode_screen.dart`'s `_ItemCard` already avoids for its draggable
+/// items ("a card the child is holding must not be painted in a colour that
+/// means correct... before it has been dropped anywhere"), just applied to
+/// tap mode's "before it has been tapped" instead. Same neutral-surface/
+/// hairline-border chrome as that sibling card, so both modes read as one
+/// visual language.
 class _AnswerItem extends StatelessWidget {
   const _AnswerItem({
     required this.photo,
-    required this.definition,
     required this.flashCorrect,
     required this.onTap,
   });
 
   final Photo photo;
-  final ModuleDefinition definition;
   final bool? flashCorrect;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final style = photo.category == PhotoCategory.target ? definition.targetStyle : definition.distractorStyle;
 
     // Identical visual weight for both outcomes (§10/§12: no alarm colour, no
     // de-emphasised failure state) — only which existing feedback token is
@@ -270,29 +378,47 @@ class _AnswerItem extends StatelessWidget {
         onTap: onTap,
         child: AnimatedContainer(
           duration: context.motion(TkMotion.base),
-          // The gap between this ring and the AnswerTarget fill inside it is
-          // load-bearing, not spacing: without it a yellow "try again" ring
-          // around a pale category fill has no edge to read against.
           padding: const EdgeInsets.all(TkSpace.xxs),
           decoration: BoxDecoration(
             borderRadius: TkRadius.lg,
             border: Border.all(color: flashColor, width: TkStroke.feedback),
           ),
-          // AnswerTarget always paints colour AND CategoryShape together
-          // (widgets/answer_target.dart) — never colour alone.
-          //
-          // Bigger image + label than AnswerTarget's default here (and only
-          // here plus speak mode's stimulus) — tap mode's array is the child's
-          // main visual read of the trial, so it gets the larger size; match
-          // mode's zones are untouched.
-          child: AnswerTarget(
-            style: style,
-            label: photo.label,
-            labelStyle: context.type.titleLg,
-            child: SizedBox(
-              width: 96,
-              height: 96,
-              child: PhotoImage(localPath: photo.localPath, borderRadius: TkRadius.xs),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              minWidth: TemanKuMetrics.childTouchTarget,
+              minHeight: TemanKuMetrics.childTouchTarget,
+            ),
+            child: Container(
+              padding: const EdgeInsets.all(TkSpace.sm),
+              decoration: BoxDecoration(
+                color: colors.surface,
+                borderRadius: TkRadius.md,
+                border: Border.all(color: colors.border, width: TkStroke.hairline),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Bigger image + label than a neutral match-mode item card
+                  // (and only here plus speak mode's stimulus) — tap mode's
+                  // array is the child's main visual read of the trial, so
+                  // it gets the larger size.
+                  SizedBox(
+                    width: 96,
+                    height: 96,
+                    child: PhotoImage(localPath: photo.localPath, borderRadius: TkRadius.xs),
+                  ),
+                  if (photo.label != null) ...[
+                    const SizedBox(height: TkSpace.xxs),
+                    Text(
+                      photo.label!,
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: context.type.titleLg.copyWith(color: colors.text),
+                    ),
+                  ],
+                ],
+              ),
             ),
           ),
         ),

@@ -26,11 +26,11 @@ import 'package:temanku/core/constants/domain_enums.dart';
 ///   - [NoStorytellerService] (`no_storyteller_service.dart`) — the default.
 ///     Local, canned, varied by module/tier. Zero network calls, so the
 ///     feature genuinely works before any API key exists.
-///   - `ClaudeStorytellerService` (`claude_storyteller_service.dart`) — calls
-///     the Claude API for a freshly-written line each time. Only ever bound
+///   - `GeminiStorytellerService` (`gemini_storyteller_service.dart`) — calls
+///     the Gemini API for a freshly-written line each time. Only ever bound
 ///     in `core/service_locator.dart` for a child whose guardian has both
 ///     opted in (`Child.storytellerEnabled`) *and* whose build carries a key
-///     (`--dart-define=ANTHROPIC_API_KEY=...`) — see that file's own doc
+///     (`--dart-define=GEMINI_API_KEY=...`) — see that file's own doc
 ///     comment for why the key check is separate from the consent check.
 abstract class StorytellerService {
   /// Returns one short Bahasa Indonesia sentence (occasionally two) narrated

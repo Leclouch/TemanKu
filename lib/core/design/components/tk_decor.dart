@@ -21,7 +21,9 @@ library;
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
+import 'package:temanku/core/design/asset_probe.dart';
 import 'package:temanku/core/design/theme.dart';
 
 enum TkDecorShape {
@@ -42,31 +44,64 @@ enum TkDecorShape {
   ring,
 }
 
+/// A real decor shape exported from Haikei, `assets/decor/decor_N.svg` — see
+/// `assets/decor/README.md` for how those get sourced. Numbered rather than
+/// named because Haikei exports are arbitrary organic shapes with no fixed
+/// correspondence to [TkDecorShape]'s procedural vocabulary.
+enum TkDecorAsset {
+  decor1,
+  decor2,
+  decor3,
+  decor4,
+  decor5,
+  decor6,
+  decor7,
+  decor8,
+}
+
+extension on TkDecorAsset {
+  String get path => 'assets/decor/decor_${index + 1}.svg';
+}
+
 /// One decorative shape, painted flat in [color] at [opacity].
 ///
 /// [rotation] is in radians. Sizing follows the widget's box — wrap in a
 /// [SizedBox] or position with [Positioned] at the call site; this widget
 /// never sizes itself.
+///
+/// [shape] is always required and is what renders while [asset] is null, its
+/// file hasn't been dropped into `assets/decor/` yet, or is still loading —
+/// see [tkAssetExists]. When present, the asset is force-tinted to [color]
+/// via a `srcIn` [ColorFilter], the same "color always comes from a token"
+/// rule the procedural painter follows, so a caller only ever names one
+/// [color] regardless of which path renders.
 class TkDecor extends StatelessWidget {
   const TkDecor({
     super.key,
     required this.shape,
     required this.color,
+    this.asset,
     this.rotation = 0,
     this.opacity = 1,
   });
 
   final TkDecorShape shape;
   final Color color;
+  final TkDecorAsset? asset;
   final double rotation;
   final double opacity;
 
   @override
   Widget build(BuildContext context) {
-    Widget painted = CustomPaint(
+    final fallback = CustomPaint(
       painter: _TkDecorPainter(shape: shape, color: color),
       child: const SizedBox.expand(),
     );
+
+    Widget painted = asset == null
+        ? fallback
+        : _TkDecorAssetOrFallback(path: asset!.path, color: color, fallback: fallback);
+
     if (rotation != 0) {
       painted = Transform.rotate(angle: rotation, child: painted);
     }
@@ -74,6 +109,29 @@ class TkDecor extends StatelessWidget {
       painted = Opacity(opacity: opacity, child: painted);
     }
     return painted;
+  }
+}
+
+class _TkDecorAssetOrFallback extends StatelessWidget {
+  const _TkDecorAssetOrFallback({required this.path, required this.color, required this.fallback});
+
+  final String path;
+  final Color color;
+  final Widget fallback;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<bool>(
+      future: tkAssetExists(path),
+      builder: (context, snapshot) {
+        if (snapshot.data != true) return fallback;
+        return SvgPicture.asset(
+          path,
+          fit: BoxFit.contain,
+          colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+        );
+      },
+    );
   }
 }
 

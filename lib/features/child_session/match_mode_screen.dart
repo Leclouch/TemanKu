@@ -24,8 +24,11 @@ import 'package:temanku/core/service_locator.dart';
 import 'package:temanku/core/design/design.dart';
 import 'package:temanku/data/models/child.dart';
 import 'package:temanku/data/models/photo.dart';
+import 'package:temanku/data/models/session.dart';
 import 'package:temanku/engine/modes/match/match_mode_controller.dart';
 import 'package:temanku/widgets/answer_target.dart';
+import 'package:temanku/widgets/level_indicator_badge.dart';
+import 'package:temanku/widgets/mascot.dart';
 import 'package:temanku/widgets/mastery_closure_prompt.dart';
 import 'package:temanku/widgets/photo_image.dart';
 
@@ -62,6 +65,42 @@ class _MatchModeScreenState extends ConsumerState<MatchModeScreen> {
   bool _loading = true;
   String? _setupError;
 
+  /// Riwayat wiring — see [_endSession]. Null until [_bootstrap] has loaded a
+  /// starting position; [_endSession] no-ops on a guardian exit that lands
+  /// before that (loading screen, setup-error notice), since nothing worth
+  /// recording happened yet.
+  Session? _session;
+  DateTime? _sessionStart;
+  LadderPosition _position = const LadderPosition.start();
+
+  /// Guardian-only debug/preview flag (`Child.levelIndicatorEnabled`) — see
+  /// that field's own doc comment. Loaded once in [_bootstrap]; false until
+  /// then, same as every other field this screen only knows after loading.
+  bool _levelIndicatorEnabled = false;
+
+  /// True once the dial engine's ceiling was reached at least once this
+  /// session — sticky for the rest of the session even if the guardian
+  /// chooses "Lanjutkan" and keeps playing, so a later quiet exit still
+  /// records [SessionOutcome.completed] rather than losing that fact.
+  bool _reachedCeiling = false;
+
+  /// Trials completed since the last closure prompt (mastery- or
+  /// interval-triggered) — reset whenever either one fires and the guardian
+  /// chooses "Lanjutkan". Drives [showNaturalPausePrompt] independently of
+  /// [_reachedCeiling]: see that function's own doc comment for why a
+  /// session needs a way to reach a natural pause without ever reaching the
+  /// dial engine's ceiling.
+  int _trialsSinceLastPause = 0;
+
+  /// The mascot's live pose — resting between drops, a beat of
+  /// [MascotPose.celebrating] on a correct drop, then back to
+  /// [MascotPose.standing]. See [Mascot.reactionTick]'s own doc comment for
+  /// why [_mascotReactionTick] exists alongside [_mascotPose]: a "try again"
+  /// keeps the pose at `standing`, so the tick is what makes the jump replay
+  /// on a second consecutive miss.
+  MascotPose _mascotPose = MascotPose.standing;
+  int _mascotReactionTick = 0;
+
   @override
   void initState() {
     super.initState();
@@ -82,11 +121,48 @@ class _MatchModeScreenState extends ConsumerState<MatchModeScreen> {
           module: widget.module,
           mode: ResponseMode.match,
         );
+    _position = position;
+    // Null only if the child was deleted mid-session (rare); the badge
+    // simply stays off rather than this screen failing to load over it.
+    final child = await ref.read(childRepositoryProvider).getChild(widget.childId);
+    _levelIndicatorEnabled = child?.levelIndicatorEnabled ?? false;
+    _session = await ref.read(sessionRepositoryProvider).startSession(
+          childId: widget.childId,
+          module: widget.module,
+          mode: ResponseMode.match,
+        );
+    _sessionStart = DateTime.now();
     _photos = await ref.read(photoRepositoryProvider).listPhotos(
           childId: widget.childId,
           module: widget.module,
         );
     await _composeTrial(position);
+  }
+
+  /// Persists whatever happened this session to Riwayat — the one call site
+  /// missing before this file existed with a session repository at all (see
+  /// `data/repositories/session_repository.dart`'s own doc comment). Fire-
+  /// and-forget from both call sites (same reasoning as the sound-effect
+  /// calls elsewhere in this file): a guardian's exit must never wait on a
+  /// write completing.
+  Future<void> _endSession(SessionOutcome outcome) async {
+    final session = _session;
+    final start = _sessionStart;
+    if (session == null || start == null) return;
+    await ref.read(sessionRepositoryProvider).endSession(
+          sessionId: session.id,
+          summary: SessionSummary(
+            sessionId: session.id,
+            childId: widget.childId,
+            module: widget.module,
+            mode: ResponseMode.match,
+            duration: DateTime.now().difference(start),
+            endedAt: DateTime.now(),
+            ladderAtEnd: _position,
+            observations: const [],
+            outcome: outcome,
+          ),
+        );
   }
 
   Future<void> _composeTrial(LadderPosition position) async {
@@ -100,6 +176,7 @@ class _MatchModeScreenState extends ConsumerState<MatchModeScreen> {
       if (!mounted) return;
       setState(() {
         _trial = trial;
+        _position = position;
         _sortedSlots = {};
         _recentTargetSlots = [trial.targetSlot, ..._recentTargetSlots].take(2).toList();
         _recentTargetZones = [
@@ -133,6 +210,11 @@ class _MatchModeScreenState extends ConsumerState<MatchModeScreen> {
       // pool). Incorrect: nothing changes here, so the item simply remains
       // exactly where it was — that *is* "returns to its origin position".
       if (correct) _sortedSlots = {..._sortedSlots, itemSlot};
+      // Celebrating pops in on a correct drop; a miss stays in `standing`
+      // but still bumps the tick so the jump replays (see that field's own
+      // doc comment).
+      _mascotPose = correct ? MascotPose.celebrating : MascotPose.standing;
+      _mascotReactionTick++;
     });
     // Same trigger point as the zone flash above, alongside it rather than
     // replacing it — fire-and-forget, same reasoning as tap mode.
@@ -143,7 +225,12 @@ class _MatchModeScreenState extends ConsumerState<MatchModeScreen> {
     );
     unawaited(
       Future.delayed(TkMotion.feedbackHold, () {
-        if (mounted) setState(() => _zoneFlash = null);
+        if (!mounted) return;
+        setState(() {
+          _zoneFlash = null;
+          // The celebration is a beat, not a held pose.
+          if (_mascotPose == MascotPose.celebrating) _mascotPose = MascotPose.standing;
+        });
       }),
     );
 
@@ -164,11 +251,26 @@ class _MatchModeScreenState extends ConsumerState<MatchModeScreen> {
 
       // Checked only here, at the trial-completion boundary — not on every
       // drop — so a mid-trial mastery moment never interrupts a partially
-      // sorted array with a dialog.
+      // sorted array with a dialog. The periodic natural-pause counter below
+      // counts the same way, once per completed trial rather than once per
+      // drop, so "every N trials" means the same thing here as it does in
+      // tap/speak mode's per-response granularity.
       if (result.masteredAtCeiling) {
+        _reachedCeiling = true;
+        _trialsSinceLastPause = 0;
         final shouldContinue = await showMasteryClosurePrompt(context, ref);
         if (!mounted) return;
         if (!shouldContinue) {
+          unawaited(_endSession(SessionOutcome.completed));
+          context.pop();
+          return;
+        }
+      } else if (++_trialsSinceLastPause >= naturalPauseTrialInterval) {
+        _trialsSinceLastPause = 0;
+        final shouldContinue = await showNaturalPausePrompt(context, ref);
+        if (!mounted) return;
+        if (!shouldContinue) {
+          unawaited(_endSession(SessionOutcome.completed));
           context.pop();
           return;
         }
@@ -180,7 +282,15 @@ class _MatchModeScreenState extends ConsumerState<MatchModeScreen> {
   @override
   Widget build(BuildContext context) {
     return TkChildScreen(
-      onExit: () => context.pop(),
+      onExit: () {
+        // A quiet exit after the ceiling was already reached this session
+        // (guardian chose "Lanjutkan" earlier, then stopped later) still
+        // counts as completed — see [_reachedCeiling]'s own doc comment.
+        unawaited(_endSession(_reachedCeiling ? SessionOutcome.completed : SessionOutcome.endedEarly));
+        context.pop();
+      },
+      corner: Mascot(size: 128, pose: _mascotPose, reactionTick: _mascotReactionTick),
+      debugBadge: _levelIndicatorEnabled ? LevelIndicatorBadge(position: _position) : null,
       child: Builder(builder: _buildBody),
     );
   }

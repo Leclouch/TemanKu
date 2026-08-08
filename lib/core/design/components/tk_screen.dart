@@ -23,6 +23,7 @@ class TkScreen extends StatelessWidget {
     required this.title,
     required this.child,
     this.actions,
+    this.onBack,
     this.scrollable = true,
     this.maxWidth = TemanKuMetrics.guardianMaxWidth,
     this.padding = const EdgeInsets.all(TkSpace.gutter),
@@ -34,6 +35,15 @@ class TkScreen extends StatelessWidget {
   final String title;
   final Widget child;
   final List<Widget>? actions;
+
+  /// When provided, replaces the [AppBar]'s default back behaviour with an
+  /// explicit callback — needed for a screen that can be reached both by a
+  /// push (where `Navigator.canPop` is true and Flutter would already draw a
+  /// back arrow on its own) and by a `context.go()` that replaced the whole
+  /// stack (where it can't pop, so no arrow appears at all without this).
+  /// Leave null on any screen only ever reached by push, where the default
+  /// behaviour is already correct.
+  final VoidCallback? onBack;
 
   /// When true (the default) the body scrolls as one column. Pass false for a
   /// screen that manages its own scrolling — a `ListView.builder` over a long
@@ -90,7 +100,11 @@ class TkScreen extends StatelessWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(title: Text(title), actions: actions),
+      appBar: AppBar(
+        title: Text(title),
+        actions: actions,
+        leading: onBack == null ? null : BackButton(onPressed: onBack),
+      ),
       floatingActionButton: floatingActionButton,
       body: SafeArea(
         top: false,
@@ -125,6 +139,7 @@ class TkChildScreen extends StatelessWidget {
     required this.child,
     this.corner,
     this.bottomOverlay,
+    this.debugBadge,
     this.maxWidth = TemanKuMetrics.contentMaxWidth,
   });
 
@@ -134,8 +149,8 @@ class TkChildScreen extends StatelessWidget {
   final Widget child;
 
   /// An optional decorative element in the bottom-left, opposite the exit dot.
-  /// Day-arc passes the mascot here; the three trial screens pass nothing and
-  /// keep their zero-decoration rule.
+  /// Every child screen — day-arc and the three trial modes — passes the
+  /// mascot here (`widgets/mascot.dart`).
   final Widget? corner;
 
   /// Centred along the bottom edge, above [child]. Speak mode's guardian ✅/❌
@@ -145,6 +160,13 @@ class TkChildScreen extends StatelessWidget {
   /// Callers reserve their own height for it in [child] so the task above
   /// never shifts when it appears; see `speak_mode_screen.dart`.
   final Widget? bottomOverlay;
+
+  /// Bottom-right, mirroring [corner] on the opposite side — the one current
+  /// user is `LevelIndicatorBadge` (`widgets/level_indicator_badge.dart`),
+  /// gated behind `Child.levelIndicatorEnabled`. Like [bottomOverlay], this
+  /// belongs to the guardian, not the child — see that field's own doc
+  /// comment.
+  final Widget? debugBadge;
 
   final double maxWidth;
 
@@ -158,7 +180,14 @@ class TkChildScreen extends StatelessWidget {
           body: SafeArea(
             child: Stack(
               children: [
-                Center(
+                // Nudged up from dead centre — a fixed offset, not a
+                // percentage of screen height, so it reads the same on every
+                // device rather than growing with taller screens. Leaves
+                // room at the bottom edge for [corner] (the mascot) without
+                // the two ever touching; still "one task, fixed position"
+                // per the class doc comment, just not mathematically centred.
+                Align(
+                  alignment: const Alignment(0, -0.12),
                   child: ConstrainedBox(
                     constraints: BoxConstraints(maxWidth: maxWidth),
                     child: Padding(
@@ -186,6 +215,12 @@ class TkChildScreen extends StatelessWidget {
                     right: 0,
                     bottom: TkSpace.md,
                     child: Center(child: bottomOverlay!),
+                  ),
+                if (debugBadge != null)
+                  Positioned(
+                    right: TkSpace.xs,
+                    bottom: TkSpace.xs,
+                    child: debugBadge!,
                   ),
               ],
             ),

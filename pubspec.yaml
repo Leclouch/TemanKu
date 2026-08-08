@@ -82,6 +82,14 @@ dependencies:
   # `IconData` constants, so this has no such ceiling.
   lucide_icons_flutter: ^3.1.15
 
+  # SVG renderer for real illustration assets (Maxima redesign pass, see
+  # `Inspiration/instruksi-decor-icon-mascot.md`) — decor shapes exported from
+  # Haikei (`assets/decor/`) and mascot poses composed in Blush
+  # (`assets/mascot/`), replacing the hand-coded CustomPainter shapes those
+  # two files fall back to when no asset is present. See `tk_decor.dart` and
+  # `widgets/mascot.dart` for the load-with-fallback mechanics.
+  flutter_svg: ^2.0.17
+
   # NOTE: fonts are bundled as static asset files (below), not via google_fonts —
   # the app is offline-first (§11) and must not depend on a network fetch for type.
 
@@ -117,6 +125,14 @@ flutter:
     # Sound-effect chimes (`audio/app_sound_service.dart`) — see
     # assets/sounds/.gitkeep for the placeholder-vs-real-audio status.
     - assets/sounds/
+    # Real decor/mascot illustration, sourced by hand from Haikei/Blush — see
+    # assets/decor/README.md and assets/mascot/README.md for the exact
+    # filenames `tk_decor.dart` / `widgets/mascot.dart` look for. Directories
+    # are committed empty (.gitkeep) until those files are dropped in; both
+    # components paint a procedural fallback until then, so this is safe to
+    # declare ahead of the assets actually existing.
+    - assets/decor/
+    - assets/mascot/
 
   fonts:
     # Display type — TemanKuTypography.display. OFL-licensed, static instances

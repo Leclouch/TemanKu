@@ -47,6 +47,7 @@ class InMemorySessionRepository implements SessionRepository {
           'Nyaman dengan kelompok yang lebih besar.',
           'Mulai ragu ketika bendanya mirip satu sama lain.',
         ],
+        outcome: SessionOutcome.completed,
       ),
       SessionSummary(
         sessionId: 'session_seed_1',
@@ -62,6 +63,7 @@ class InMemorySessionRepository implements SessionRepository {
         observations: const [
           'Mengenali anggota keluarga dengan cepat.',
         ],
+        outcome: SessionOutcome.endedEarly,
         endedByDisengagement: true,
       ),
     ];

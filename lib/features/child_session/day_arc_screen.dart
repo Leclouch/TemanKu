@@ -23,6 +23,7 @@
 library;
 
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -82,6 +83,27 @@ const _dayArcModules = [
     framingText: 'Sekarang waktunya sama keluarga',
     icon: LucideIcons.house,
   ),
+];
+
+/// A module with nothing behind it yet — no [ModuleDefinition], no photo
+/// pipeline, no ladder. Deliberately a separate, lighter type from
+/// [_DayArcModule] rather than a fake/stub [ModuleDefinition]: constructing
+/// one of those would imply this module has a real `targetStyle`, similarity
+/// tiers, and so on, none of which exist. Same four modules and copy as
+/// `guardian_home_placeholder.dart`'s `_ModuleListCard` — see that file for
+/// why these four specifically are the declared future scope.
+class _PlannedModule {
+  const _PlannedModule({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+}
+
+const _plannedDayArcModules = [
+  _PlannedModule(icon: LucideIcons.coins, label: 'Uang'),
+  _PlannedModule(icon: LucideIcons.trash2, label: 'Sampah'),
+  _PlannedModule(icon: LucideIcons.shieldAlert, label: 'Pengenalan Keamanan'),
+  _PlannedModule(icon: LucideIcons.userCheck, label: 'Pengenalan Orang Terpercaya'),
 ];
 
 String _routeFor(String childId, ModuleId module, ResponseMode mode) => switch (mode) {
@@ -146,10 +168,16 @@ class _DayArcScreenState extends ConsumerState<DayArcScreen> {
     // `pronunciation_hint_service.dart` states for its own off switch: the
     // predictable off state is "this screen never asks", not "it asks and
     // happens to get free flavor text back".
-    if (!child.storytellerEnabled) return;
+    if (!child.storytellerEnabled) {
+      developer.log('story beat skipped: storytellerEnabled is false', name: 'DayArcScreen');
+      return;
+    }
 
     final mode = _preferredModeFor(child.availableModes);
-    if (mode == null) return;
+    if (mode == null) {
+      developer.log('story beat skipped: no available mode', name: 'DayArcScreen');
+      return;
+    }
 
     final position = await ref.read(ladderPersistenceProvider).load(
           childId: child.id,
@@ -168,6 +196,7 @@ class _DayArcScreenState extends ConsumerState<DayArcScreen> {
     final beat = await ref
         .read(storytellerServiceProvider(child.storytellerEnabled))
         .nextBeat(storyContext);
+    developer.log('story beat resolved: ${beat ?? "null"}', name: 'DayArcScreen');
     if (!mounted || beat == null) return;
     setState(() => _storyBeat = beat);
   }
@@ -176,12 +205,12 @@ class _DayArcScreenState extends ConsumerState<DayArcScreen> {
   Widget build(BuildContext context) {
     return TkChildScreen(
       onExit: () => context.pop(),
-      // Purely decorative corner element — day-arc only (see
-      // widgets/mascot.dart's own doc comment for why tap/match/speak never
-      // get this). Bottom-left, opposite the exit dot, small enough to never
-      // compete with the cards above it. Greeting pose: this is the one
-      // moment day-arc plays "welcome back", before either module opens.
-      corner: const Mascot(size: 104, pose: MascotPose.greeting),
+      // Bottom-left, opposite the exit dot, small enough to never compete
+      // with the cards above it. Greeting pose: this is the one moment the
+      // child sees "welcome back", before either module opens — tap/match/
+      // speak (`widgets/mascot.dart`) start their own mascot in the resting
+      // `standing` pose instead, since there's no arrival beat mid-trial.
+      corner: const Mascot(size: 148, pose: MascotPose.greeting),
       child: Builder(builder: _buildBody),
     );
   }
@@ -207,10 +236,15 @@ class _DayArcScreenState extends ConsumerState<DayArcScreen> {
         // Quiet background texture, not foreground content — a `Stack` with
         // no explicit size takes its size from the tallest non-positioned
         // child (the `Column` below), so these `Positioned` shapes never
-        // grow the layout or push anything. Two shapes only, both washed to
-        // low opacity: `instruksi-decor-icon-mascot.md`'s "calm, editorial"
-        // brief applies to every surface except the mascot itself, so decor
-        // stays texture, never the thing competing for attention.
+        // grow the layout or push anything. Six shapes, one per corner plus
+        // two edge accents, all washed to low opacity:
+        // `instruksi-decor-icon-mascot.md`'s "calm, editorial" brief applies
+        // to every surface except the mascot itself, so decor stays
+        // texture, never the thing competing for attention — but texture
+        // reads as texture only when it's spread around the frame, not
+        // huddled in one corner. Every shape bleeds off its edge via a
+        // negative offset (the same technique the original two used) so
+        // nothing sits squarely inside the card's own reading area.
         Positioned(
           top: -28,
           right: -36,
@@ -220,6 +254,7 @@ class _DayArcScreenState extends ConsumerState<DayArcScreen> {
               height: 168,
               child: TkDecor(
                 shape: TkDecorShape.blob,
+                asset: TkDecorAsset.decor1,
                 color: colors.primaryAccentWash,
                 rotation: 0.4,
                 opacity: 0.7,
@@ -234,13 +269,88 @@ class _DayArcScreenState extends ConsumerState<DayArcScreen> {
             child: SizedBox(
               width: 56,
               height: 56,
-              child: TkDecor(shape: TkDecorShape.ring, color: colors.successWash, opacity: 0.8),
+              child: TkDecor(
+                shape: TkDecorShape.ring,
+                asset: TkDecorAsset.decor2,
+                color: colors.successWash,
+                opacity: 0.8,
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          top: -22,
+          left: -26,
+          child: IgnorePointer(
+            child: SizedBox(
+              width: 88,
+              height: 88,
+              child: TkDecor(
+                shape: TkDecorShape.star,
+                asset: TkDecorAsset.decor4,
+                color: colors.info.withValues(alpha: 0.16),
+                rotation: -0.2,
+                opacity: 0.6,
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          bottom: -20,
+          right: -18,
+          child: IgnorePointer(
+            child: SizedBox(
+              width: 110,
+              height: 110,
+              child: TkDecor(
+                shape: TkDecorShape.cloud,
+                asset: TkDecorAsset.decor3,
+                color: colors.neutralWash,
+                opacity: 0.6,
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          bottom: -14,
+          left: -22,
+          child: IgnorePointer(
+            child: SizedBox(
+              width: 64,
+              height: 64,
+              child: TkDecor(
+                shape: TkDecorShape.arch,
+                asset: TkDecorAsset.decor5,
+                color: colors.primaryAccentWash,
+                rotation: 0.15,
+                opacity: 0.45,
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          top: 220,
+          right: -14,
+          child: IgnorePointer(
+            child: SizedBox(
+              width: 48,
+              height: 48,
+              child: TkDecor(
+                shape: TkDecorShape.ring,
+                asset: TkDecorAsset.decor6,
+                color: colors.successWash,
+                opacity: 0.5,
+              ),
             ),
           ),
         ),
         Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Fixed — never inside the scrollable region below, so "Hari Ini
+            // Bersama <name>" stays put at this screen's usual middle-upper
+            // spot (`TkChildScreen`'s own `Align(0, -0.12)`) regardless of
+            // how many module cards are beneath it.
             Text(
               'Hari Ini Bersama',
               textAlign: TextAlign.center,
@@ -257,26 +367,64 @@ class _DayArcScreenState extends ConsumerState<DayArcScreen> {
               style: context.type.displayLg.copyWith(color: colors.primaryAccent),
             ),
             const SizedBox(height: TkSpace.xxl),
-            for (final module in _dayArcModules) ...[
-              _ModuleCard(
-                module: module,
-                onTap: preferredMode == null
-                    ? null
-                    : () => context.push(
-                          _routeFor(widget.childId, module.definition.id, preferredMode),
-                        ),
+            // Only this part scrolls. Capped at a fraction of the screen
+            // rather than left to grow with the child count — six cards no
+            // longer fit the fixed frame two used to (see this file's git
+            // history), but the fix is scoped to the list itself, not the
+            // whole screen: the heading above stays exactly where it always
+            // was, never sliding toward the top edge as more cards are added.
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * 0.42,
               ),
-              const SizedBox(height: TkSpace.sm),
-            ],
-            if (preferredMode == null)
-              Padding(
-                padding: const EdgeInsets.only(top: TkSpace.xs),
-                child: Text(
-                  'Belum ada mode yang aktif untuk anak ini. Minta wali mengisi intake dulu.',
-                  textAlign: TextAlign.center,
-                  style: context.type.body.copyWith(color: colors.textMuted),
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    for (final module in _dayArcModules) ...[
+                      _ModuleCard(
+                        module: module,
+                        onTap: preferredMode == null
+                            ? null
+                            : () => context.push(
+                                  _routeFor(widget.childId, module.definition.id, preferredMode),
+                                ),
+                      ),
+                      const SizedBox(height: TkSpace.sm),
+                    ],
+                    if (preferredMode == null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: TkSpace.xs),
+                        child: Text(
+                          'Belum ada mode yang aktif untuk anak ini. Minta wali mengisi intake dulu.',
+                          textAlign: TextAlign.center,
+                          style: context.type.body.copyWith(color: colors.textMuted),
+                        ),
+                      ),
+                    // Four future-scope modules, shown here (not just on the
+                    // guardian side) so the full intended scope is visible in
+                    // the actual product screen — deliberately requested
+                    // despite this being the one child-facing surface the
+                    // design otherwise keeps at zero clutter.
+                    // `_PlaceholderModuleCard` never takes [onTap] at all
+                    // (not even a snackbar, unlike its guardian-home
+                    // counterpart in `guardian_home_placeholder.dart`'s
+                    // `_PlaceholderModuleTile`) — on a screen a nonverbal
+                    // child uses unsupervised, a tap that produces a message
+                    // is still a tap that produced *something*, which is its
+                    // own small promise this card must not make. Same 0.5
+                    // dimmed-and-inert opacity `_ModuleCard` already uses for
+                    // "no mode enabled" above, so a child who has learned
+                    // "faded = not a real door" from that case reads these
+                    // the same way.
+                    const SizedBox(height: TkSpace.sm),
+                    for (final module in _plannedDayArcModules) ...[
+                      _PlaceholderModuleCard(module: module),
+                      const SizedBox(height: TkSpace.sm),
+                    ],
+                  ],
                 ),
               ),
+            ),
             if (_storyBeat != null) ...[
               const SizedBox(height: TkSpace.lg),
               // The mascot's line — a speech-bubble plate rather than bare
@@ -284,7 +432,9 @@ class _DayArcScreenState extends ConsumerState<DayArcScreen> {
               // status line. Never blocks layout while it loads: this whole
               // block simply doesn't exist until `_storyBeat` resolves (see
               // `_loadStoryBeat`'s own doc comment on why it's fetched after,
-              // not before, the screen is already usable).
+              // not before, the screen is already usable). Kept fixed, below
+              // the scroll box rather than inside it — the mascot's line is
+              // its own thing, not one more item in the module list.
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: TkSpace.md,
@@ -409,6 +559,71 @@ class _ModuleCard extends StatelessWidget {
                 ],
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A future-scope module's card — same size/shape as [_ModuleCard] so it
+/// reads as one consistent row of doorways, but neutral-grey rather than
+/// module-tinted (it isn't a module yet, so it gets no module colour) and
+/// with no [InkWell]/`onTap` at all, unlike [_ModuleCard]'s `dimmed` state,
+/// which is still tappable in principle (`onTap` is only null while intake
+/// is incomplete). This card is never tappable, on purpose — see the call
+/// site's own comment for why even a snackbar-on-tap is more promise than
+/// this surface should make.
+class _PlaceholderModuleCard extends StatelessWidget {
+  const _PlaceholderModuleCard({required this.module});
+
+  final _PlannedModule module;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Opacity(
+      opacity: 0.5,
+      child: Container(
+        constraints: const BoxConstraints(
+          minHeight: TemanKuMetrics.childTouchTarget * 1.4,
+        ),
+        decoration: BoxDecoration(
+          color: colors.surface,
+          borderRadius: TkRadius.lg,
+          border: Border.all(color: colors.borderStrong, width: TkStroke.regular),
+        ),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                width: 84,
+                color: colors.neutralWash,
+                alignment: Alignment.center,
+                child: Icon(module.icon, size: 34, color: colors.textMuted),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(TkSpace.lg),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        module.label,
+                        style: context.type.titleLg.copyWith(color: colors.text),
+                      ),
+                      const SizedBox(height: TkSpace.xxs),
+                      Text(
+                        'Belum tersedia',
+                        style: context.type.caption.copyWith(color: colors.textMuted),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),

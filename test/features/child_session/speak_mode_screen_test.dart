@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,12 +14,38 @@ import 'package:temanku/engine/advancement/advancement_tracker.dart';
 import 'package:temanku/engine/dial_engine/dial_engine.dart';
 import 'package:temanku/engine/ladder_persistence.dart';
 import 'package:temanku/features/child_session/speak_mode_screen.dart';
+import 'package:temanku/speech/tts/word_audio_service.dart';
 import 'package:temanku/speech/vad_service.dart';
 import 'package:temanku/widgets/answer_target.dart';
 import 'package:temanku/widgets/exit_dot.dart';
 
 const _childId = 'child_1';
 const _module = ModuleId.makanan;
+
+/// A [WordAudioService] whose [speak] hangs until [release] is called — lets
+/// a test hold the screen in its "model still speaking" window on demand,
+/// the same window a real network-bound `EdgeTtsSource` fetch sits in for
+/// however long that takes in the field.
+class _GatedWordAudioService implements WordAudioService {
+  final _gate = Completer<bool>();
+  int speakCalls = 0;
+
+  @override
+  Future<bool> speak(String word) {
+    speakCalls++;
+    return _gate.future;
+  }
+
+  void release() {
+    if (!_gate.isCompleted) _gate.complete(true);
+  }
+
+  @override
+  Future<void> prefetch(String word) async {}
+
+  @override
+  Future<void> dispose() async {}
+}
 
 /// Fully controllable [VadService] fake — resolves [listenForUtterance]
 /// with whatever [nextEvent] is set to, instantly (no real audio, no real
@@ -64,6 +92,7 @@ Widget _buildDirectApp({
   required InMemoryPhotoRepository photoRepo,
   required _FakeVad vad,
   AdvancementTracker? tracker,
+  WordAudioService? wordAudio,
 }) {
   final router = GoRouter(
     initialLocation: '/speak',
@@ -81,6 +110,13 @@ Widget _buildDirectApp({
       photoRepositoryProvider.overrideWithValue(photoRepo),
       vadServiceProvider.overrideWithValue(vad),
       if (tracker != null) advancementTrackerProvider.overrideWithValue(tracker),
+      // Speak mode reads this keyed on `Child.pronunciationHintEnabled` —
+      // both `true` and `false` are overridden so the test doesn't have to
+      // track which one the seeded child actually resolves to.
+      if (wordAudio != null) ...[
+        wordAudioServiceProvider(true).overrideWithValue(wordAudio),
+        wordAudioServiceProvider(false).overrideWithValue(wordAudio),
+      ],
     ],
     child: MaterialApp.router(routerConfig: router),
   );
@@ -123,6 +159,61 @@ void main() {
 
     expect(tracker.streakFor(childId: _childId, module: _module, mode: ResponseMode.speak), 1);
     expect(find.byType(AnswerTarget), findsOneWidget);
+  });
+
+  testWidgets(
+      'the judge cluster is disabled while the model is still speaking — regression test for '
+      'the race where an early tap fires a second speak() onto the still-playing first one',
+      (tester) async {
+    final childRepo = InMemoryChildRepository(seed: false);
+    await childRepo.createChild(name: 'Arif', availableModes: {ResponseMode.speak});
+    final photoRepo = _seedPhotos();
+    final vad = _FakeVad()..nextEvent = const SpeechEvent(spoke: true);
+    final tracker = AdvancementTracker(
+      dialEngine: const TwoDialEngine(),
+      persistence: LadderPersistence(childRepo),
+    );
+    final wordAudio = _GatedWordAudioService();
+
+    await tester.pumpWidget(
+      _buildDirectApp(
+        childRepo: childRepo,
+        photoRepo: photoRepo,
+        vad: vad,
+        tracker: tracker,
+        wordAudio: wordAudio,
+      ),
+    );
+    // Deliberately not pumpAndSettle: `speak()` is gated and never resolves
+    // on its own, so settling would hang. A few pumps are enough to get
+    // through trial composition into the "speaking" window.
+    await tester.pump();
+    await tester.pump();
+    await tester.pump();
+
+    expect(wordAudio.speakCalls, 1);
+
+    // The cluster is disabled — this tap must be a no-op, not a second
+    // speak() call and not a streak change.
+    await tester.tap(find.bySemanticsLabel('Benar'), warnIfMissed: false);
+    await tester.pump();
+    expect(wordAudio.speakCalls, 1);
+    expect(tracker.streakFor(childId: _childId, module: _module, mode: ResponseMode.speak), 0);
+
+    // Now let the model finish "speaking" — VAD resolves instantly (spoke:
+    // true), so the cluster becomes tappable and a real tap advances things
+    // exactly once.
+    wordAudio.release();
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.bySemanticsLabel('Benar'));
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pumpAndSettle();
+
+    expect(tracker.streakFor(childId: _childId, module: _module, mode: ResponseMode.speak), 1);
+    // Exactly one more speak() call for the one new trial composed above —
+    // never two, which is what the race used to produce.
+    expect(wordAudio.speakCalls, 2);
   });
 
   testWidgets('the guardian tapping "coba lagi" does not advance the streak', (tester) async {

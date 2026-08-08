@@ -41,6 +41,31 @@ class Session {
       );
 }
 
+/// How a session ended — the Riwayat status badge
+/// (`features/guardian/guardian_home_placeholder.dart`'s `_SessionRow`).
+///
+/// Deliberately binary and about *this session's own outcome*, not a
+/// generic "success/failure": a child not reaching the dial engine's
+/// ceiling is normal, expected progress, never a failure state (§10/§12) —
+/// [endedEarly] just means "no mastery moment happened in this session",
+/// the same neutral fact whether the guardian played five trials or fifty.
+enum SessionOutcome {
+  /// The dial engine's ceiling (`engine/dial_engine/dial_engine.dart`'s
+  /// `isAtCeiling`) was reached at least once during this session — whether
+  /// the guardian then chose "Selesai" on the mastery closure prompt
+  /// (`widgets/mastery_closure_prompt.dart`) or "Lanjutkan" and kept playing
+  /// before eventually exiting. Ceiling-reached is the fact this status
+  /// records, not which button ended the session.
+  completed,
+
+  /// No mastery moment occurred before the session ended — the guardian used
+  /// the always-visible quiet exit (`core/design/components/tk_screen.dart`'s
+  /// `onExit`) before the ceiling was ever reached this session, or the
+  /// disengagement detector's veto (§4.5, [SessionSummary.endedByDisengagement])
+  /// ended it first.
+  endedEarly,
+}
+
 /// What the guardian actually sees, and the only session artefact that leaves
 /// the device.
 ///
@@ -58,6 +83,7 @@ class SessionSummary {
     required this.endedAt,
     required this.ladderAtEnd,
     required this.observations,
+    required this.outcome,
     this.endedByDisengagement = false,
     this.photoToReview,
   });
@@ -76,6 +102,13 @@ class SessionSummary {
   /// Descriptive Bahasa sentences, e.g. "sering ragu saat benda mirip, tapi
   /// nyaman dengan kelompok besar."
   final List<String> observations;
+
+  /// [SessionOutcome.completed] or [SessionOutcome.endedEarly] — see that
+  /// enum's own doc comment. Every real session, regardless of how it ends,
+  /// gets recorded with one of these; there is no third "session doesn't
+  /// count" state (§8: an early exit is still part of the child's history,
+  /// not a discarded attempt).
+  final SessionOutcome outcome;
 
   /// True when the disengagement detector's veto (§4.5) ended the session.
   /// Surfaced to the guardian as context, never as a failure.

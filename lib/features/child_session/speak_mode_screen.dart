@@ -43,6 +43,7 @@ import 'package:temanku/core/design/design.dart';
 import 'package:temanku/data/models/child.dart';
 import 'package:temanku/data/models/photo.dart';
 import 'package:temanku/data/models/pronunciation_hint_log.dart';
+import 'package:temanku/data/models/session.dart';
 import 'package:temanku/engine/modes/mode_controller.dart';
 import 'package:temanku/engine/modes/speak/speak_mode_controller.dart';
 import 'package:temanku/speech/audio/wav_clip.dart';
@@ -53,6 +54,7 @@ import 'package:temanku/speech/articulation_tolerance.dart';
 import 'package:temanku/speech/tts/word_audio_service.dart';
 import 'package:temanku/speech/vad_service.dart';
 import 'package:temanku/widgets/answer_target.dart';
+import 'package:temanku/widgets/mascot.dart';
 import 'package:temanku/widgets/mastery_closure_prompt.dart';
 import 'package:temanku/widgets/photo_image.dart';
 
@@ -118,6 +120,37 @@ class _SpeakModeScreenState extends ConsumerState<SpeakModeScreen> {
   /// response can never paint a stale hint next to the current trial.
   int _trialGeneration = 0;
 
+  /// Riwayat wiring — see [_endSession]. Null until [_bootstrap] has loaded a
+  /// starting position; [_endSession] no-ops on a guardian exit that lands
+  /// before that (loading screen, setup-error notice), since nothing worth
+  /// recording happened yet.
+  Session? _session;
+  DateTime? _sessionStart;
+
+  /// True once the dial engine's ceiling was reached at least once this
+  /// session — sticky for the rest of the session even if the guardian
+  /// chooses "Lanjutkan" and keeps playing, so a later quiet exit still
+  /// records [SessionOutcome.completed] rather than losing that fact.
+  bool _reachedCeiling = false;
+
+  /// Trials completed since the last closure prompt (mastery- or
+  /// interval-triggered) — reset whenever either one fires and the guardian
+  /// chooses "Lanjutkan". Drives [showNaturalPausePrompt] independently of
+  /// [_reachedCeiling]: see that function's own doc comment for why a
+  /// session needs a way to reach a natural pause without ever reaching the
+  /// dial engine's ceiling.
+  int _trialsSinceLastPause = 0;
+
+  /// The mascot's live pose — resting while the child listens/speaks, a beat
+  /// of [MascotPose.celebrating] once the guardian judges an attempt
+  /// correct, then back to [MascotPose.standing]. See [Mascot.reactionTick]'s
+  /// own doc comment for why [_mascotReactionTick] exists alongside
+  /// [_mascotPose]: a "try again" (or "tidak mencoba") keeps the pose at
+  /// `standing`, so the tick is what makes the jump replay on a second
+  /// consecutive miss.
+  MascotPose _mascotPose = MascotPose.standing;
+  int _mascotReactionTick = 0;
+
   @override
   void initState() {
     super.initState();
@@ -148,11 +181,44 @@ class _SpeakModeScreenState extends ConsumerState<SpeakModeScreen> {
           module: widget.module,
           mode: ResponseMode.speak,
         );
+    _position = position;
+    _session = await ref.read(sessionRepositoryProvider).startSession(
+          childId: widget.childId,
+          module: widget.module,
+          mode: ResponseMode.speak,
+        );
+    _sessionStart = DateTime.now();
     _photos = await ref.read(photoRepositoryProvider).listPhotos(
           childId: widget.childId,
           module: widget.module,
         );
     await _composeTrial(position);
+  }
+
+  /// Persists whatever happened this session to Riwayat — the one call site
+  /// missing before this file existed with a session repository at all (see
+  /// `data/repositories/session_repository.dart`'s own doc comment). Fire-
+  /// and-forget from both call sites (same reasoning as the sound-effect
+  /// calls elsewhere in this file): a guardian's exit must never wait on a
+  /// write completing.
+  Future<void> _endSession(SessionOutcome outcome) async {
+    final session = _session;
+    final start = _sessionStart;
+    if (session == null || start == null) return;
+    await ref.read(sessionRepositoryProvider).endSession(
+          sessionId: session.id,
+          summary: SessionSummary(
+            sessionId: session.id,
+            childId: widget.childId,
+            module: widget.module,
+            mode: ResponseMode.speak,
+            duration: DateTime.now().difference(start),
+            endedAt: DateTime.now(),
+            ladderAtEnd: _position,
+            observations: const [],
+            outcome: outcome,
+          ),
+        );
   }
 
   Future<void> _composeTrial(LadderPosition position) async {
@@ -338,7 +404,12 @@ class _SpeakModeScreenState extends ConsumerState<SpeakModeScreen> {
 
   Future<void> _judge(TrialOutcome outcome) async {
     final trial = _trial;
-    if (trial == null) return;
+    // `_speaking` guard is defense in depth — the judge cluster is already
+    // disabled for this window (see `build()`'s `enabled:`), but a stray
+    // caller reaching this method directly must not be able to race a
+    // second `_wordAudio.speak()` onto the first one's still-playing call.
+    // See that guard's own comment for what the race actually does.
+    if (trial == null || _speaking) return;
     _autoAdvanceTimer?.cancel();
 
     // Guardian's tap (or the auto-flagged notAttempted) passes straight
@@ -363,6 +434,13 @@ class _SpeakModeScreenState extends ConsumerState<SpeakModeScreen> {
           ? ref.read(soundServiceProvider).playCorrect()
           : ref.read(soundServiceProvider).playTryAgain(),
     );
+    // Same "celebrate, then settle back to standing" beat as tap/match mode
+    // — notAttempted rides the same `standing` branch as incorrect, no third
+    // pose.
+    setState(() {
+      _mascotPose = correct ? MascotPose.celebrating : MascotPose.standing;
+      _mascotReactionTick++;
+    });
 
     final result = await ref.read(advancementTrackerProvider).recordResponse(
           childId: widget.childId,
@@ -376,11 +454,26 @@ class _SpeakModeScreenState extends ConsumerState<SpeakModeScreen> {
     // this one.
     await Future.delayed(TkMotion.feedbackHold);
     if (!mounted) return;
+    if (_mascotPose == MascotPose.celebrating) {
+      setState(() => _mascotPose = MascotPose.standing);
+    }
 
     if (result.masteredAtCeiling) {
+      _reachedCeiling = true;
+      _trialsSinceLastPause = 0;
       final shouldContinue = await showMasteryClosurePrompt(context, ref);
       if (!mounted) return;
       if (!shouldContinue) {
+        unawaited(_endSession(SessionOutcome.completed));
+        context.pop();
+        return;
+      }
+    } else if (++_trialsSinceLastPause >= naturalPauseTrialInterval) {
+      _trialsSinceLastPause = 0;
+      final shouldContinue = await showNaturalPausePrompt(context, ref);
+      if (!mounted) return;
+      if (!shouldContinue) {
+        unawaited(_endSession(SessionOutcome.completed));
         context.pop();
         return;
       }
@@ -392,10 +485,30 @@ class _SpeakModeScreenState extends ConsumerState<SpeakModeScreen> {
   Widget build(BuildContext context) {
     final showJudge = _trial != null && !_loading && _setupError == null;
     return TkChildScreen(
-      onExit: () => context.pop(),
+      onExit: () {
+        // A quiet exit after the ceiling was already reached this session
+        // (guardian chose "Lanjutkan" earlier, then stopped later) still
+        // counts as completed — see [_reachedCeiling]'s own doc comment.
+        unawaited(_endSession(_reachedCeiling ? SessionOutcome.completed : SessionOutcome.endedEarly));
+        context.pop();
+      },
+      corner: Mascot(size: 128, pose: _mascotPose, reactionTick: _mascotReactionTick),
       bottomOverlay: showJudge
           ? _GuardianJudgeCluster(
-              enabled: !_listening,
+              // `!_speaking` closes a real race: without it, the cluster is
+              // tappable the instant a trial composes — before the model
+              // has even started speaking the word, since `_listening`
+              // only flips true *after* `_runTrialTurn` finishes speaking.
+              // A judge tap while `_speaking` calls `_composeTrial` for the
+              // next trial, which fires a second `_wordAudio.speak()` onto
+              // the same singleton `AudioPlayer` the first call is still
+              // mid-`play()` on — `CachedWordAudioService.speak()` opens
+              // every call with `player.stop()`, so the second call
+              // silently kills the first's audio, and depending on timing
+              // either trial's word can end up being the one the child
+              // never hears. This is the mechanism behind "sound sometimes
+              // plays, sometimes doesn't" — not a network flake.
+              enabled: !_listening && !_speaking,
               showNotAttempted: !_controller.vad.providesAutomaticSilenceDetection,
               hint: _hintResult,
               onJudge: _judge,

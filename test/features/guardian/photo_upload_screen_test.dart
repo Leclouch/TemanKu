@@ -16,12 +16,19 @@ import 'package:temanku/features/guardian/photo_upload_screen.dart';
 import 'package:temanku/photo_pipeline/classifier_service.dart';
 import 'package:temanku/photo_pipeline/quality_gate/quality_gate.dart';
 
-/// Deterministic stand-in for the real [ClassifierService] binding — tests
-/// that don't pass one still exercise the real `TfliteClassifier` default,
-/// which degrades to a null suggestion in this environment (no native
-/// library available), same outcome as `_FakeClassifier(null)` but by
-/// accident rather than by design. Tests about the suggestion itself use
-/// this instead so the behaviour under test doesn't depend on that.
+/// Deterministic stand-in for the real [ClassifierService] binding. Always
+/// bound in `buildApp` below, even for tests that don't care about the
+/// suggestion — the real default (`SiglipClassifier` as of this writing)
+/// makes an actual network call, which a widget test must never do
+/// unprompted: `flutter_test` blocks outbound HTTP and returns a synthetic
+/// 400 for it, and that round trip was enough to hang `pumpAndSettle`.
+/// `TfliteClassifier`, the previous default, got away with never being
+/// overridden here because it happened to degrade to a null suggestion
+/// near-instantly in this environment (no native library available) — same
+/// outcome `_FakeClassifier(null)` gives below, but by accident rather than
+/// by design. Don't rely on whatever the current default happens to do;
+/// this class is what makes that not matter.
+
 class _FakeClassifier implements ClassifierService {
   _FakeClassifier(this._suggestion);
 
@@ -106,7 +113,9 @@ void main() {
       overrides: [
         qualityGateProvider.overrideWithValue(gate),
         photoRepositoryProvider.overrideWithValue(repo),
-        if (classifier != null) classifierServiceProvider.overrideWithValue(classifier),
+        // Unconditional — see _FakeClassifier's doc comment for why this
+        // must never fall through to the real default.
+        classifierServiceProvider.overrideWithValue(classifier ?? _FakeClassifier(null)),
       ],
       child: MaterialApp(
         theme: TemanKuTheme.guardian,

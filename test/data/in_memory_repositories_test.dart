@@ -146,6 +146,7 @@ void main() {
           endedAt: DateTime(2026, 8, 1),
           ladderAtEnd: const LadderPosition.start(),
           observations: const ['Nyaman dengan kelompok kecil.'],
+          outcome: SessionOutcome.completed,
         ),
       );
 

@@ -39,7 +39,7 @@ const _consentTitle = 'Aktifkan bantuan mode bicara?';
 const _storyConsentTitle = 'Aktifkan cerita maskot?';
 
 /// Names the one exchange this feature adds: the child's name, modul name,
-/// and current tahap — never a photo, never a recording — sent to Claude to
+/// and current tahap — never a photo, never a recording — sent to Gemini to
 /// write one flavor sentence. Explicit and separate from the speak-mode
 /// consent above, same "ask before the first on" shape.
 const _storyConsentBody =
@@ -47,7 +47,7 @@ const _storyConsentBody =
     'kali anak menyelesaikan sebuah babak — sekadar hiburan, bukan '
     'penilaian.\n\n'
     'Untuk menulis kalimat itu, nama anak, nama modul, dan tahap latihan '
-    'saat ini dikirim ke layanan Claude (Anthropic). Tidak ada foto, '
+    'saat ini dikirim ke layanan Gemini (Google). Tidak ada foto, '
     'rekaman suara, atau data sesi lain yang dikirim.\n\n'
     'Ini berbeda dari, dan tidak mengubah, cara aplikasi menyimpan foto dan '
     'data lain — yang selalu tetap di perangkat.';
@@ -131,6 +131,24 @@ class _ChildSettingsScreenState extends ConsumerState<ChildSettingsScreen> {
 
     setState(() => _busy = true);
     final updated = child.copyWith(pronunciationHintEnabled: enabled);
+    await ref.read(childRepositoryProvider).updateChild(updated);
+    if (!mounted) return;
+    setState(() {
+      _child = updated;
+      _busy = false;
+    });
+  }
+
+  // No confirm/consent gate either direction — unlike _setEnabled/
+  // _setStoryEnabled above, this never sends anything off-device, so there
+  // is no consent event to gate. Same "no confirmation needed" shape as
+  // _setSoundMuted below.
+  Future<void> _setLevelIndicatorEnabled(bool enabled) async {
+    final child = _child;
+    if (child == null) return;
+
+    setState(() => _busy = true);
+    final updated = child.copyWith(levelIndicatorEnabled: enabled);
     await ref.read(childRepositoryProvider).updateChild(updated);
     if (!mounted) return;
     setState(() {
@@ -260,7 +278,7 @@ class _ChildSettingsScreenState extends ConsumerState<ChildSettingsScreen> {
                         const _NoticePanel(
                           icon: LucideIcons.sparkles,
                           text: 'Nama anak, nama modul, dan tahap latihan saat '
-                              'ini dikirim ke layanan Claude (Anthropic) untuk '
+                              'ini dikirim ke layanan Gemini (Google) untuk '
                               'menulis kalimat cerita. Tidak ada foto atau '
                               'rekaman suara yang dikirim.',
                         ),
@@ -299,6 +317,27 @@ class _ChildSettingsScreenState extends ConsumerState<ChildSettingsScreen> {
                           ],
                         ),
                       ],
+                    ],
+                  ),
+                ),
+                TkCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TkSwitchTile(
+                        title: 'Tampilkan tingkat (khusus wali)',
+                        value: child.levelIndicatorEnabled,
+                        onChanged: _busy ? null : _setLevelIndicatorEnabled,
+                      ),
+                      const SizedBox(height: TkSpace.xs),
+                      Text(
+                        'Menampilkan label kecil dan netral di pojok layar mode '
+                        'ketuk dan seret, berisi tahap dan jumlah pilihan saat '
+                        'ini — untuk memeriksa perkembangan latihan saja. Tidak '
+                        'terlihat oleh anak sebagai skor atau nilai, dan tidak '
+                        'pernah dikirim ke mana pun.',
+                        style: context.type.bodySm.copyWith(color: colors.text),
+                      ),
                     ],
                   ),
                 ),

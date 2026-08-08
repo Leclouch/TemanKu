@@ -63,6 +63,14 @@ class GuardianHomePlaceholder extends ConsumerWidget {
     final colors = context.colors;
     return TkScreen(
       title: 'Catatan wali',
+      // Reached both by a push (from `select_child_screen.dart`, where
+      // `canPop` is already true and the default AppBar back arrow would
+      // work) and by intake's `context.go(...)` (`intake_screen.dart`),
+      // which replaces the whole stack and leaves nothing to pop — so the
+      // default-only behaviour silently drops the arrow on that second path.
+      // Falling back to the select-child screen keeps it working either way.
+      onBack: () =>
+          context.canPop() ? context.pop() : context.go(Routes.selectChild),
       decor: const TkScreenDecor(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -83,6 +91,7 @@ class GuardianHomePlaceholder extends ConsumerWidget {
                   _IntakeEntryPoint(childId: childId),
                   _UploadEntryPoint(childId: childId),
                   _SettingsEntryPoint(childId: childId),
+                  _ModuleListCard(childId: childId),
                 ],
               ),
             ),
@@ -237,6 +246,218 @@ class _UploadEntryPoint extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The "Modul" card — the app's full intended module scope in one place,
+/// inline in the normal guardian flow rather than on a separate roadmap
+/// page. Makanan and Keluarga are wired end-to-end today (photo pipeline,
+/// ladder, all three response modes); the four rows below them are
+/// deliberate future scope with genuinely nothing behind them yet — never
+/// used for work that's merely incomplete or partially wired (that's a bug
+/// to fix, not a placeholder to label). Kept muted, badged, and inert rather
+/// than hidden, so a reviewer sees the intended scope without hunting for it.
+class _ModuleListCard extends StatelessWidget {
+  const _ModuleListCard({required this.childId});
+
+  final String childId;
+
+  @override
+  Widget build(BuildContext context) {
+    return TkCard(
+      title: 'Modul',
+      subtitle: 'Modul yang sudah aktif, dan yang masih dalam pengembangan.',
+      leading: const _CardIcon(icon: LucideIcons.layoutGrid),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _ActiveModuleTile(
+            childId: childId,
+            module: ModuleId.makanan,
+            icon: LucideIcons.utensils,
+            description: 'Mengenali jenis makanan dan minuman sehari-hari',
+          ),
+          _ActiveModuleTile(
+            childId: childId,
+            module: ModuleId.keluarga,
+            icon: LucideIcons.house,
+            description: 'Mengenali anggota keluarga dan benda-benda di rumah',
+          ),
+          const _PlaceholderModuleTile(
+            icon: LucideIcons.coins,
+            name: 'Uang',
+            description: 'Mengenali apakah uang cukup untuk membeli sesuatu',
+          ),
+          const _PlaceholderModuleTile(
+            icon: LucideIcons.trash2,
+            name: 'Sampah',
+            description: 'Memilah sampah organik dan non-organik',
+          ),
+          const _PlaceholderModuleTile(
+            icon: LucideIcons.shieldAlert,
+            name: 'Pengenalan Keamanan',
+            description: 'Membedakan benda atau situasi aman dan berbahaya',
+          ),
+          const _PlaceholderModuleTile(
+            icon: LucideIcons.userCheck,
+            name: 'Pengenalan Orang Terpercaya',
+            description: 'Mengenali orang yang bisa dimintai tolong',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One working module's row inside [_ModuleListCard] — real navigation, to
+/// the same photo-upload doorway [_UploadEntryPoint] above already offers
+/// for this module, since "what does this module do" is best answered by
+/// showing the guardian its actual content rather than adding a second,
+/// competing destination.
+class _ActiveModuleTile extends StatelessWidget {
+  const _ActiveModuleTile({
+    required this.childId,
+    required this.module,
+    required this.icon,
+    required this.description,
+  });
+
+  final String childId;
+  final ModuleId module;
+  final IconData icon;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    return _ModuleTileShell(
+      icon: icon,
+      name: _displayNameFor(module),
+      description: description,
+      trailing: Icon(LucideIcons.arrowRight, size: 16, color: context.colors.textMuted),
+      onTap: () => context.push(Routes.photoUploadFor(childId, module)),
+    );
+  }
+}
+
+/// One not-yet-built module's row inside [_ModuleListCard]. Tapping never
+/// navigates or throws — it only ever surfaces [_belumTersediaMessage] in a
+/// snackbar, so an idle tap from a curious guardian reads as calm and
+/// intentional rather than broken.
+class _PlaceholderModuleTile extends StatelessWidget {
+  const _PlaceholderModuleTile({
+    required this.icon,
+    required this.name,
+    required this.description,
+  });
+
+  final IconData icon;
+  final String name;
+  final String description;
+
+  static const _belumTersediaMessage = 'Modul ini sedang dikembangkan';
+
+  @override
+  Widget build(BuildContext context) {
+    return _ModuleTileShell(
+      icon: icon,
+      name: name,
+      description: description,
+      trailing: const _BelumTersediaBadge(),
+      muted: true,
+      onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(_belumTersediaMessage)),
+      ),
+    );
+  }
+}
+
+/// The one shared "Belum tersedia" badge every placeholder module row uses —
+/// defined once so the muted/planned visual language stays identical across
+/// all four rows rather than drifting per call site.
+class _BelumTersediaBadge extends StatelessWidget {
+  const _BelumTersediaBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return const TkBadge(label: 'Belum tersedia');
+  }
+}
+
+/// Shared row layout for [_ActiveModuleTile] and [_PlaceholderModuleTile] —
+/// same icon-plate/name/description/trailing shape either way, so "live" and
+/// "planned" read as one consistent list and differ only in [muted] and
+/// [trailing], never in structure.
+class _ModuleTileShell extends StatelessWidget {
+  const _ModuleTileShell({
+    required this.icon,
+    required this.name,
+    required this.description,
+    required this.trailing,
+    this.onTap,
+    this.muted = false,
+  });
+
+  final IconData icon;
+  final String name;
+  final String description;
+  final Widget trailing;
+  final VoidCallback? onTap;
+
+  /// True for a not-yet-built module — dims the whole row via one shared
+  /// [Opacity] wrap rather than threading a separate muted colour through
+  /// every child, so this stays the single place that visual rule lives.
+  final bool muted;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+
+    final row = Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: muted ? c.neutralWash : c.primaryAccentWash,
+            borderRadius: TkRadius.sm,
+          ),
+          child: Icon(icon, size: 18, color: muted ? c.textMuted : c.primaryAccent),
+        ),
+        const SizedBox(width: TkSpace.sm),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                style: context.type.bodySm.copyWith(color: c.text, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 2),
+              Text(description, style: context.type.caption.copyWith(color: c.textMuted)),
+            ],
+          ),
+        ),
+        const SizedBox(width: TkSpace.xs),
+        trailing,
+      ],
+    );
+
+    final content = ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: TemanKuMetrics.minTouchTarget),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: TkSpace.xs),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: muted ? Opacity(opacity: 0.55, child: row) : row,
+        ),
+      ),
+    );
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(borderRadius: TkRadius.sm, onTap: onTap, child: content),
     );
   }
 }
@@ -707,6 +928,17 @@ class _SessionRow extends StatelessWidget {
                   TkBadge(label: summary.module.name),
                   const SizedBox(width: TkSpace.xxs),
                   TkBadge(label: summary.mode.name, tone: TkBadgeTone.info),
+                  const SizedBox(width: TkSpace.xxs),
+                  // The one badge that isn't just naming a fixed axis
+                  // (module/mode) — it's the fact this whole feature was
+                  // missing before: whether a mastery moment happened this
+                  // session, distinguishable at a glance from an early exit.
+                  TkBadge(
+                    label: sessionOutcomeLabel(summary.outcome),
+                    tone: summary.outcome == SessionOutcome.completed
+                        ? TkBadgeTone.success
+                        : TkBadgeTone.neutral,
+                  ),
                 ],
               ),
               const SizedBox(height: TkSpace.xs),

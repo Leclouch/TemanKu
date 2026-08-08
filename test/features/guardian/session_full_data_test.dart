@@ -44,6 +44,7 @@ Future<void> _recordSession(
       endedAt: endedAt,
       ladderAtEnd: ladderAtEnd,
       observations: const [],
+      outcome: SessionOutcome.completed,
     ),
   );
 }

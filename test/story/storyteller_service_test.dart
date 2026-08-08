@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:temanku/content/makanan/makanan_module.dart';
-import 'package:temanku/story/claude_storyteller_service.dart';
+import 'package:temanku/story/gemini_storyteller_service.dart';
 import 'package:temanku/story/no_storyteller_service.dart';
 import 'package:temanku/story/storyteller_service.dart';
 
@@ -23,11 +23,16 @@ const _masteredContext = StoryContext(
 );
 
 String _messageBody(String text) => jsonEncode({
-      'id': 'msg_test',
-      'type': 'message',
-      'role': 'assistant',
-      'content': [
-        {'type': 'text', 'text': text},
+      'candidates': [
+        {
+          'content': {
+            'role': 'model',
+            'parts': [
+              {'text': text},
+            ],
+          },
+          'finishReason': 'STOP',
+        },
       ],
     });
 
@@ -66,9 +71,9 @@ void main() {
     });
   });
 
-  group('ClaudeStorytellerService', () {
-    test('a 200 with a text block returns the trimmed text', () async {
-      final service = ClaudeStorytellerService(
+  group('GeminiStorytellerService', () {
+    test('a 200 with a text part returns the trimmed text', () async {
+      final service = GeminiStorytellerService(
         apiKey: 'test-key',
         client: MockClient((request) async => _utf8Response(_messageBody('  Babak baru dimulai!  '))),
       );
@@ -77,25 +82,22 @@ void main() {
       expect(beat, 'Babak baru dimulai!');
     });
 
-    test('sends the API key and version headers Anthropic requires', () async {
+    test('sends the API key header Gemini requires', () async {
       String? sentKey;
-      String? sentVersion;
-      final service = ClaudeStorytellerService(
-        apiKey: 'sk-ant-test',
+      final service = GeminiStorytellerService(
+        apiKey: 'test-gemini-key',
         client: MockClient((request) async {
-          sentKey = request.headers['x-api-key'];
-          sentVersion = request.headers['anthropic-version'];
+          sentKey = request.headers['x-goog-api-key'];
           return _utf8Response(_messageBody('ok'));
         }),
       );
 
       await service.nextBeat(_practiceContext);
-      expect(sentKey, 'sk-ant-test');
-      expect(sentVersion, '2023-06-01');
+      expect(sentKey, 'test-gemini-key');
     });
 
     test('a non-200 response returns null, never throws', () async {
-      final service = ClaudeStorytellerService(
+      final service = GeminiStorytellerService(
         apiKey: 'test-key',
         client: MockClient((request) async => http.Response('rate limited', 429)),
       );
@@ -103,29 +105,26 @@ void main() {
     });
 
     test('malformed JSON returns null, never throws', () async {
-      final service = ClaudeStorytellerService(
+      final service = GeminiStorytellerService(
         apiKey: 'test-key',
         client: MockClient((request) async => http.Response('not json {{{', 200)),
       );
       expect(await service.nextBeat(_practiceContext), isNull);
     });
 
-    test('an empty content array (e.g. a pre-output refusal) returns null, never crashes '
-        'on content[0]', () async {
-      final service = ClaudeStorytellerService(
+    test('an empty candidates array (e.g. a safety block) returns null, never crashes '
+        'on candidates[0]', () async {
+      final service = GeminiStorytellerService(
         apiKey: 'test-key',
         client: MockClient((request) async => _utf8Response(jsonEncode({
-              'id': 'msg_test',
-              'type': 'message',
-              'role': 'assistant',
-              'content': <dynamic>[],
+              'candidates': <dynamic>[],
             }))),
       );
       expect(await service.nextBeat(_practiceContext), isNull);
     });
 
     test('a network failure returns null, never throws', () async {
-      final service = ClaudeStorytellerService(
+      final service = GeminiStorytellerService(
         apiKey: 'test-key',
         client: MockClient((request) async => throw Exception('network unreachable')),
       );

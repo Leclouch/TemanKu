@@ -39,6 +39,7 @@ Future<void> _recordSession(
   String childId, {
   required List<bool> outcomes,
   required List<String> observations,
+  SessionOutcome sessionOutcome = SessionOutcome.completed,
 }) async {
   final session = await sessionRepo.startSession(
     childId: childId,
@@ -68,6 +69,7 @@ Future<void> _recordSession(
       endedAt: DateTime(2026, 1, 1),
       ladderAtEnd: const LadderPosition.start(),
       observations: observations,
+      outcome: sessionOutcome,
     ),
   );
 }
@@ -106,6 +108,67 @@ void main() {
     // Raw-data content is not built/shown yet — collapsed by default.
     expect(find.textContaining('Total percobaan'), findsNothing);
     expect(find.textContaining('percobaan tanpa bantuan berhasil'), findsNothing);
+  });
+
+  testWidgets(
+      'the Modul card lists both active modules and four muted "Belum tersedia" '
+      'placeholders, and tapping a placeholder never navigates', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 2600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final childRepo = InMemoryChildRepository(seed: false);
+    final child = await childRepo.createChild(name: 'Arif', availableModes: {ResponseMode.tap});
+
+    await tester.pumpWidget(_buildApp(child.id, childRepo, InMemorySessionRepository(seed: false)));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Uang'), findsOneWidget);
+    expect(find.text('Sampah'), findsOneWidget);
+    expect(find.text('Pengenalan Keamanan'), findsOneWidget);
+    expect(find.text('Pengenalan Orang Terpercaya'), findsOneWidget);
+    // Same shared badge, once per placeholder row — see `_BelumTersediaBadge`.
+    expect(find.text('Belum tersedia'), findsNWidgets(4));
+
+    // A placeholder tap is inert: it only ever surfaces the snackbar below,
+    // never a route change — the AppBar title staying put is the proof.
+    await tester.tap(find.text('Uang'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Modul ini sedang dikembangkan'), findsOneWidget);
+    expect(find.text('Catatan wali'), findsOneWidget);
+  });
+
+  testWidgets('Riwayat shows a distinct status badge for a completed session vs one the '
+      'guardian ended early', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final childRepo = InMemoryChildRepository(seed: false);
+    final child = await childRepo.createChild(name: 'Arif', availableModes: {ResponseMode.tap});
+    final sessionRepo = InMemorySessionRepository(seed: false);
+    await _recordSession(
+      sessionRepo,
+      child.id,
+      outcomes: [true],
+      observations: ['Sudah menguasai babak ini.'],
+      sessionOutcome: SessionOutcome.completed,
+    );
+    await _recordSession(
+      sessionRepo,
+      child.id,
+      outcomes: [true],
+      observations: ['Berhenti sebelum mencapai batas atas.'],
+      sessionOutcome: SessionOutcome.endedEarly,
+    );
+
+    await tester.pumpWidget(_buildApp(child.id, childRepo, sessionRepo));
+    await tester.pumpAndSettle();
+
+    // One badge per session, both visible in the Riwayat list at once — this
+    // is the fact that was entirely missing before: a guardian could not
+    // previously tell a mastery session from an early exit at a glance.
+    expect(find.text('Selesai'), findsOneWidget);
+    expect(find.text('Berhenti di tengah'), findsOneWidget);
   });
 
   testWidgets('expanding "Data lengkap" reveals trial counts, the independent-correct '

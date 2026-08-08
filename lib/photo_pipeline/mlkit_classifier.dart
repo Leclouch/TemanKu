@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:google_mlkit_image_labeling/google_mlkit_image_labeling.dart';
 
 import 'package:temanku/core/constants/domain_enums.dart';
@@ -74,17 +75,12 @@ class MlKitClassifier implements ClassifierService {
       _labeler = ImageLabeler(
         options: ImageLabelerOptions(confidenceThreshold: mlKitConfidenceThreshold),
       );
-    } catch (error, stackTrace) {
+    } catch (error) {
       // Same degrade-not-throw contract as TfliteClassifier: a construction
       // failure here (missing Play Services on an unbundled install, etc.)
       // leaves _labeler null, and suggestLabel below reads that as "ask the
       // guardian" — never surfaced as an error to the upload flow.
-      developer.log(
-        'MlKitClassifier failed to initialize; falling back to manual entry.',
-        name: 'MlKitClassifier',
-        error: error,
-        stackTrace: stackTrace,
-      );
+      _log('MlKitClassifier failed to initialize; falling back to manual entry: $error');
       _labeler = null;
     }
   }
@@ -105,6 +101,16 @@ class MlKitClassifier implements ClassifierService {
       final labels = await labeler
           .processImage(InputImage.fromFilePath(imagePath))
           .timeout(_mlKitTimeout);
+      // TEMP DEBUG — remove once _labelTranslations is verified against real
+      // device output (see this file's own doc comment: that map was never
+      // confirmed against actual ML Kit label strings/casing). This is the
+      // evidence to check when a photo that obviously shows e.g. an apple
+      // still leaves the name field empty: either ML Kit returned nothing
+      // usable, or it returned something not present in the map below.
+      _log(
+        'ML Kit raw labels for $imagePath: '
+        '${labels.map((l) => '${l.label} (${l.confidence.toStringAsFixed(2)})').join(', ')}',
+      );
       for (final label in labels) {
         final translated = _labelTranslations[label.label.trim().toLowerCase()];
         if (translated != null) {
@@ -116,18 +122,10 @@ class MlKitClassifier implements ClassifierService {
       // all: ask the guardian, don't guess a translation.
       return null;
     } on TimeoutException {
-      developer.log(
-        'MlKitClassifier timed out after $_mlKitTimeout; treating as no suggestion.',
-        name: 'MlKitClassifier',
-      );
+      _log('MlKitClassifier timed out after $_mlKitTimeout; treating as no suggestion.');
       return null;
     } catch (error, stackTrace) {
-      developer.log(
-        'MlKitClassifier inference failed; treating as no suggestion.',
-        name: 'MlKitClassifier',
-        error: error,
-        stackTrace: stackTrace,
-      );
+      _log('MlKitClassifier inference failed; treating as no suggestion: $error\n$stackTrace');
       return null;
     }
   }
@@ -136,6 +134,16 @@ class MlKitClassifier implements ClassifierService {
   Future<void> dispose() async {
     await _labeler?.close();
     _labeler = null;
+  }
+
+  // TEMP DEBUG — remove alongside the call sites above once the label map is
+  // verified on device. Writes to both `dart:developer` (DevTools/`flutter
+  // run`'s own console) and `debugPrint` (which does reach raw `adb logcat`,
+  // under the `flutter` tag — `dart:developer.log` alone does not), since
+  // it's not obvious in advance which one whoever's testing will be watching.
+  void _log(String message) {
+    developer.log(message, name: 'MlKitClassifier');
+    debugPrint('[MlKitClassifier] $message');
   }
 }
 

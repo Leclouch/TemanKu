@@ -32,6 +32,8 @@ google-services.json
 GoogleService-Info.plist
 .env
 .env.*
+secrets.json
+secrets.*.json
 !.env.example
 
 # Firebase CLI + local emulator state. IT-2 will run the Firestore emulator for

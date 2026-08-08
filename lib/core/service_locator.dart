@@ -11,7 +11,7 @@
 /// | Provider                    | Now                        | Swap to                    | When |
 /// |-----------------------------|-----------------------------|----------------------------|------|
 /// | `childRepositoryProvider`   | `InMemoryChildRepository`  | `FirestoreChildRepository` | IT-2, Day 1–2 |
-/// | `classifierServiceProvider` | `MlKitClassifier` (promoted) | `TfliteClassifier`, then `ManualLabelClassifier` | revert here if it stops being reliable — no debate |
+/// | `classifierServiceProvider` | `SiglipClassifier` (promoted) | `TfliteClassifier`, then `ManualLabelClassifier` | revert here if it stops being reliable — no debate |
 /// | `vadServiceProvider`        | `SileroVadService` (promoted) | `ThreeButtonFallback` | revert here if the `vad` package ever stops being reliable — no debate |
 ///
 /// `pronunciationHintServiceProvider` isn't in that table — it isn't a global
@@ -24,16 +24,23 @@
 /// ADR-4 principle as the table above — the choice lives in exactly one
 /// file — just parameterised instead of static.
 ///
-/// `classifierServiceProvider` and `vadServiceProvider` have both been
-/// promoted to their primaries — `photo_pipeline/mlkit_classifier.dart`
-/// wraps Google ML Kit's on-device Image Labeling (no training required,
-/// see that file for why it replaced the Teachable Machine/TFLite model),
-/// and `speech/silero_vad_service.dart` is a real implementation (on-device
-/// Silero via `package:vad`, model bundled as an asset — see that file and
-/// `pubspec.yaml`'s asset entry) for the latter. Both fallback columns are
-/// now the *revert* direction, not the pending direction —
-/// `ThreeButtonFallback` and `TfliteClassifier` are both untouched and still
-/// exactly one line away if their primaries ever need reverting.
+/// `classifierServiceProvider` tried two prior primaries and moved on from
+/// both: `photo_pipeline/tflite_classifier.dart` (a bundled Teachable
+/// Machine export, locked to the ~14 classes it was manually trained on)
+/// and `photo_pipeline/mlkit_classifier.dart` (Google ML Kit's on-device
+/// Image Labeling — no training required, but its base labeler returns
+/// generic parent categories for food photos, "Food"/"Cuisine"/"Tableware"
+/// for a donut, which no translation map can turn into a correct Indonesian
+/// name). Now on `photo_pipeline/siglip_classifier.dart`, a self-hosted
+/// SigLIP2 zero-shot classifier reached over HTTPS via a static ngrok
+/// domain (`vision/vision_backend.dart`) — zero-shot means the label
+/// vocabulary is sent at request time rather than trained in, so it names
+/// exactly this app's Makanan list without either prior model's tradeoff.
+/// `vadServiceProvider` is still on its promoted primary —
+/// `speech/silero_vad_service.dart`, on-device Silero via `package:vad`,
+/// model bundled as an asset — see that file and `pubspec.yaml`'s asset
+/// entry. `ThreeButtonFallback` is untouched and still exactly one line
+/// away if that one ever needs reverting too.
 library;
 
 import 'dart:async';
@@ -63,7 +70,7 @@ import 'package:temanku/speech/no_hint_service.dart';
 import 'package:temanku/speech/pronunciation_hint_service.dart';
 import 'package:temanku/speech/remote_articulation_hint_service.dart';
 import 'package:temanku/speech/silero_vad_service.dart';
-import 'package:temanku/story/claude_storyteller_service.dart';
+import 'package:temanku/story/gemini_storyteller_service.dart';
 import 'package:temanku/story/no_storyteller_service.dart';
 import 'package:temanku/story/storyteller_service.dart';
 import 'package:temanku/speech/tts/cached_word_audio_service.dart';
@@ -127,17 +134,17 @@ final vadServiceProvider = Provider<VadService>((ref) {
   return service;
 });
 
-/// Promoted to its primary — `photo_pipeline/mlkit_classifier.dart`, on
-/// ML Kit's on-device Image Labeling. `initialize()` is fire-and-forget here
-/// rather than awaited: `MlKitClassifier.suggestLabel` already treats "not
-/// loaded yet" exactly like "failed to load" (both return null, the same
-/// outcome `ManualLabelClassifier` always produces), so nothing needs to
-/// block on this resolving before the provider can be read.
+/// Reverted from its promoted primary — see the library doc comment's
+/// tripwire table for why `photo_pipeline/mlkit_classifier.dart` didn't
+/// hold up on real photos. Back on `photo_pipeline/tflite_classifier.dart`.
+/// `initialize()` is fire-and-forget here rather than awaited:
+/// `TfliteClassifier.suggestLabel` already treats "not loaded yet" exactly
+/// like "failed to load" (both return null, the same outcome
+/// `ManualLabelClassifier` always produces), so nothing needs to block on
+/// this resolving before the provider can be read.
 ///
 /// Tripwire unchanged from the original plan: not reliably usable → revert
-/// this line to `TfliteClassifier()` (still bundled, `photo_pipeline/
-/// tflite_classifier.dart`) or further to `ManualLabelClassifier()`. Decide
-/// once, move on.
+/// this line further to `ManualLabelClassifier()`. Decide once, move on.
 final classifierServiceProvider = Provider<ClassifierService>((ref) {
   final service = createClassifier();
   unawaited(service.initialize());
@@ -170,14 +177,14 @@ final pronunciationHintServiceProvider =
   return enabled ? RemoteArticulationHintService() : const NoHintService();
 });
 
-/// The Claude API key, supplied at build/run time only — never a literal
-/// here. `--dart-define=ANTHROPIC_API_KEY=...` (or
+/// The Gemini API key, supplied at build/run time only — never a literal
+/// here. `--dart-define=GEMINI_API_KEY=...` (or
 /// `--dart-define-from-file=secrets.json`, git-ignored) at `flutter run` /
 /// `flutter build`; empty when the build carries none. See
-/// `story/claude_storyteller_service.dart` for why this specific pattern
+/// `story/gemini_storyteller_service.dart` for why this specific pattern
 /// (compile-time define, not a settings-screen text field) is the right one
 /// for a secret that must never sit in source or in Hive.
-const String _anthropicApiKey = String.fromEnvironment('ANTHROPIC_API_KEY');
+const String _geminiApiKey = String.fromEnvironment('GEMINI_API_KEY');
 
 /// Same shape as [pronunciationHintServiceProvider] — keyed per child on
 /// `Child.storytellerEnabled`, not a global swap — but with a second gate
@@ -188,8 +195,8 @@ const String _anthropicApiKey = String.fromEnvironment('ANTHROPIC_API_KEY');
 /// automatically, the day a build ships with a key — no second toggle.
 final storytellerServiceProvider =
     Provider.family<StorytellerService, bool>((ref, enabled) {
-  if (!enabled || _anthropicApiKey.isEmpty) return const NoStorytellerService();
-  return ClaudeStorytellerService(apiKey: _anthropicApiKey);
+  if (!enabled || _geminiApiKey.isEmpty) return const NoStorytellerService();
+  return GeminiStorytellerService(apiKey: _geminiApiKey);
 });
 
 /// Speaks the target word aloud — the model half of speak mode's echoic
