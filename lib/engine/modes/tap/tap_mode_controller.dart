@@ -26,18 +26,17 @@ class TapTrial extends Trial {
 /// by the instruction; at the top tier the instruction becomes semantic
 /// ("tunjuk yang boleh dimakan") over a mixed array.
 ///
-/// ## Composition, deliberately identical in shape to match mode
+/// ## Composition
 ///
-/// Every tier composes the *same* array — one target-category photo plus
-/// `arraySize - 1` distractor-category photos, placed via the shared
-/// [PositionRotator] guard — exactly `MatchModeController`'s approach. "Mixed
-/// array" at the LRFFC tier describes the *instruction* no longer naming one
-/// specific exemplar, not a change in how many target-category items are on
-/// screen: [PositionRotator] and the shared trial log's single `targetSlot`
-/// have no notion of more than one target slot, so a second "which target"
-/// axis is not something this pass invents. This mirrors exactly how match
-/// mode's own LRFFC tier only changes zone naming, never item composition —
-/// see `engine/modes/match/match_mode_controller.dart`.
+/// Legacy tap positions, including LRFFC arrays through size four, compose one
+/// target-category photo and `arraySize - 1` distractors. Their target slot is
+/// assigned by the shared [PositionRotator] guard, exactly as before.
+///
+/// Extended LRFFC positions (array sizes five and six) compose exactly two
+/// eligible target-category photos. [TapTrial.targetSlots] records both slots;
+/// [Trial.targetSlot] remains the first target slot so the shared rotation
+/// history remains compatible. Distractor slots are composed through the
+/// multi-target [PositionRotator] APIs.
 ///
 /// Response type for [judge] is the tapped slot index (`int`).
 class TapModeController implements ModeController {
