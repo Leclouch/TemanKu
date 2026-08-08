@@ -190,10 +190,6 @@ class _SettingsEntryPoint extends StatelessWidget {
   }
 }
 
-/// The "Unggah foto" card's real entry point (§5.1/§5.2) — picks a module,
-/// then hands off to [PhotoUploadScreen]. Quality gate, variety nudge, and the
-/// no-network-call guarantee all live there; this card is just the doorway.
-//
 /// The guardian-only ladder override. The detailed screen derives its choices
 /// from the engine so this card is only a doorway, not a second level model.
 class _LevelSettingsEntryPoint extends StatelessWidget {
