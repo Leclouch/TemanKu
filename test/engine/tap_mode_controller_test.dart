@@ -135,13 +135,61 @@ void main() {
 
     test('at LRFFC an unlabelled target photo is still eligible', () async {
       const position = LadderPosition(arraySize: 2, similarityTier: SimilarityTier.lrffc);
-      final trial = await controller.nextTrial(
+      final TapTrial trial = await controller.nextTrial(
         position: position,
         available: _photos(targets: 3, distractors: 5, labelled: false),
         recentTargetSlots: const [],
         recentTargetZones: const [],
       );
       expect(trial.target.category, PhotoCategory.target);
+    });
+
+    test(
+        'at extended LRFFC composes two distinct targets in their target slots',
+        () async {
+      const position =
+          LadderPosition(arraySize: 5, similarityTier: SimilarityTier.lrffc);
+      final trial = await controller.nextTrial(
+        position: position,
+        available: _photos(targets: 3, distractors: 5, labelled: false),
+        recentTargetSlots: const [],
+        recentTargetZones: const [],
+      );
+
+      final targetSlots = trial.targetSlots;
+      final targetItems = [for (final slot in targetSlots) trial.items[slot]];
+      expect(targetSlots, hasLength(2));
+      expect(targetSlots.toSet(), hasLength(2));
+      expect(
+          targetItems.every((photo) => photo.category == PhotoCategory.target),
+          isTrue,
+      );
+      expect(targetItems.map((photo) => photo.id).toSet(), hasLength(2));
+      expect(
+          trial.items.where((photo) => photo.category == PhotoCategory.target),
+          hasLength(2),
+      );
+    });
+
+    test('at extended LRFFC requires two eligible target photos', () async {
+      const position =
+          LadderPosition(arraySize: 5, similarityTier: SimilarityTier.lrffc);
+
+      expect(
+        () => controller.nextTrial(
+          position: position,
+          available: _photos(targets: 1, distractors: 5, labelled: false),
+          recentTargetSlots: const [],
+          recentTargetZones: const [],
+        ),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            'Two target photos are needed to compose a tap trial.',
+          ),
+        ),
+      );
     });
 
     test('throws when there are not enough photos to fill the array', () async {
