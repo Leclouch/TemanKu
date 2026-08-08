@@ -121,6 +121,9 @@ class _PhotoUploadScreenState extends ConsumerState<PhotoUploadScreen> {
 
   Future<void> _capture(ImageSource source) async {
     final picked = await _picker.pickImage(source: source, imageQuality: 90);
+    // The system picker can outlive this screen — a guardian can navigate
+    // away (or the screen can be popped some other way) while it's open.
+    if (!mounted) return;
     if (picked == null) return; // Guardian cancelled — stay idle, nothing saved.
 
     setState(() {
@@ -129,6 +132,7 @@ class _PhotoUploadScreenState extends ConsumerState<PhotoUploadScreen> {
     });
 
     final result = await ref.read(qualityGateProvider).check(picked.path);
+    if (!mounted) return;
 
     if (!result.passed) {
       setState(() {
@@ -148,6 +152,10 @@ class _PhotoUploadScreenState extends ConsumerState<PhotoUploadScreen> {
             imagePath: picked.path,
             module: widget.module,
           );
+      // Checked before touching _nameController too — it's disposed the
+      // moment this screen is, and setting .text on a disposed
+      // ChangeNotifier throws just as surely as setState does.
+      if (!mounted) return;
       _nameController.text = suggestion?.label ?? '';
     }
 
