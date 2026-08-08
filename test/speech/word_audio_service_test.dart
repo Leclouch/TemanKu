@@ -1,9 +1,8 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:flutter_edge_tts/flutter_edge_tts.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
 import 'package:temanku/audio/sound_service.dart';
 import 'package:temanku/speech/tts/cached_word_audio_service.dart';
 import 'package:temanku/speech/tts/edge_tts_source.dart';
@@ -27,6 +26,38 @@ class _FakeSource implements WordAudioSource {
     requested.add(word);
     if (delay > Duration.zero) await Future<void>.delayed(delay);
     return result;
+  }
+}
+
+/// `FlutterEdgeTts.synthesize` isn't mockable through an injected transport
+/// — the real call is a raw `dart:io` WebSocket, unlike the backend-routed
+/// version this replaced (which mocked `package:http`). Neither the class
+/// nor the method is `final`, so a subclass override is the seam instead.
+class _FakeEdgeTts extends FlutterEdgeTts {
+  _FakeEdgeTts({this.result, this.error, this.delay = Duration.zero})
+      : super(voice: 'test-voice');
+
+  final Uint8List? result;
+  final Object? error;
+  final Duration delay;
+  String? lastText;
+
+  @override
+  Future<EdgeTtsSynthesisResult> synthesize(
+    String text, {
+    EdgeTtsProsody prosody = const EdgeTtsProsody(),
+    EdgeTtsConfig? config,
+    bool escapeText = true,
+  }) async {
+    lastText = text;
+    if (delay > Duration.zero) await Future<void>.delayed(delay);
+    final err = error;
+    if (err != null) throw err;
+    return EdgeTtsSynthesisResult(
+      audioBytes: result ?? Uint8List(0),
+      metadata: const [],
+      requestId: 'test-request',
+    );
   }
 }
 
@@ -65,73 +96,50 @@ void main() {
   });
 
   group('EdgeTtsSource', () {
-    test('GETs /tts with the text and voice as query parameters', () async {
-      Uri? sent;
-      final source = EdgeTtsSource(
-        client: MockClient((request) async {
-          sent = request.url;
-          return http.Response.bytes(_audio, 200);
-        }),
-      );
+    test('sends the trimmed word to the Edge TTS client and returns its audio', () async {
+      final client = _FakeEdgeTts(result: _audio);
+      final source = EdgeTtsSource(client: client);
 
       final bytes = await source.fetch('apel');
       expect(bytes, _audio);
-      expect(sent!.path, endsWith('/tts'));
-      expect(sent!.queryParameters['text'], 'apel');
-      expect(sent!.queryParameters['voice'], EdgeTtsSource.defaultVoice);
+      expect(client.lastText, 'apel');
     });
 
     test('unlike /score, it accepts any word — there is no dictionary here', () async {
       // The asymmetry that makes the echoic exercise work at all: a word can
       // be modelled aloud even when it cannot be scored, which is the common
       // case given the backend's three-word TARGET_DICT.
-      final source = EdgeTtsSource(
-        client: MockClient((request) async => http.Response.bytes(_audio, 200)),
-      );
+      final source = EdgeTtsSource(client: _FakeEdgeTts(result: _audio));
       expect(await source.fetch('Kakak Sari'), isNotNull);
     });
 
-    test('an empty or whitespace word never reaches the network', () async {
-      var called = false;
-      final source = EdgeTtsSource(
-        client: MockClient((request) async {
-          called = true;
-          return http.Response.bytes(_audio, 200);
-        }),
-      );
+    test('an empty or whitespace word never reaches the client', () async {
+      final client = _FakeEdgeTts(result: _audio);
+      final source = EdgeTtsSource(client: client);
 
       expect(await source.fetch('   '), isNull);
-      expect(called, isFalse);
+      expect(client.lastText, isNull);
     });
 
-    test('a non-200 returns null, never throws', () async {
-      final source = EdgeTtsSource(
-        client: MockClient((request) async => http.Response('nope', 502)),
-      );
-      expect(await source.fetch('apel'), isNull);
-    });
-
-    test('an empty body returns null rather than zero-length audio', () async {
-      final source = EdgeTtsSource(
-        client: MockClient((request) async => http.Response.bytes(Uint8List(0), 200)),
-      );
+    test('an empty audio result returns null rather than zero-length audio', () async {
+      final source = EdgeTtsSource(client: _FakeEdgeTts(result: Uint8List(0)));
       expect(await source.fetch('apel'), isNull);
     });
 
     test('a timeout returns null instead of stalling the child\'s turn', () async {
       final source = EdgeTtsSource(
         timeout: const Duration(milliseconds: 50),
-        client: MockClient((request) async {
-          await Future<void>.delayed(const Duration(milliseconds: 400));
-          return http.Response.bytes(_audio, 200);
-        }),
+        client: _FakeEdgeTts(
+          result: _audio,
+          delay: const Duration(milliseconds: 400),
+        ),
       );
       expect(await source.fetch('apel'), isNull);
     });
 
     test('a throwing client returns null, never propagates', () async {
       final source = EdgeTtsSource(
-        client: MockClient((request) async => throw Exception('offline')),
+        client: _FakeEdgeTts(error: Exception('offline')),
       );
       expect(await source.fetch('apel'), isNull);
     });

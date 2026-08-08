@@ -42,7 +42,7 @@
 **Context.** The build timeline already pre-approved fallbacks for two real technical risks: the Makanan classifier and VAD. Those fallbacks shouldn't be implemented as conditional branches scattered through the codebase — that's how a rushed fallback decision turns into a messy last-minute refactor.
 
 **Decision.** `ClassifierService` and `VadService` are defined as interfaces with two implementations each, decided up front:
-- `ClassifierService`: `TfliteClassifier` (primary) vs. `ManualLabelClassifier` (fallback — just prompts the guardian, no model at all)
+- `ClassifierService`: `MlKitClassifier` (primary, on-device ML Kit Image Labeling) vs. `TfliteClassifier` (revert — the original Teachable Machine model, still bundled) vs. `ManualLabelClassifier` (fallback — just prompts the guardian, no model at all)
 - `VadService`: `SileroVadService` (primary) vs. `ThreeButtonFallback` (fallback — guardian's third button does the job VAD would have done, no audio detection)
 
 **Consequences.** Triggering a fallback from the timeline's tripwire table becomes a one-line dependency swap at the app's composition root, not a scramble through UI code. This is worth building this way even though it's slightly more setup than hardcoding the primary path directly — the whole point of pre-approving fallbacks was to make the Day-3/Day-4 decision cheap, and that only holds if the code is actually structured to make swapping cheap too.

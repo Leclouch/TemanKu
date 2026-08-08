@@ -11,7 +11,7 @@
 /// | Provider                    | Now                        | Swap to                    | When |
 /// |-----------------------------|-----------------------------|----------------------------|------|
 /// | `childRepositoryProvider`   | `InMemoryChildRepository`  | `FirestoreChildRepository` | IT-2, Day 1–2 |
-/// | `classifierServiceProvider` | `TfliteClassifier` (promoted) | `ManualLabelClassifier` | revert here if it stops being reliable — no debate |
+/// | `classifierServiceProvider` | `MlKitClassifier` (promoted) | `TfliteClassifier`, then `ManualLabelClassifier` | revert here if it stops being reliable — no debate |
 /// | `vadServiceProvider`        | `SileroVadService` (promoted) | `ThreeButtonFallback` | revert here if the `vad` package ever stops being reliable — no debate |
 ///
 /// `pronunciationHintServiceProvider` isn't in that table — it isn't a global
@@ -25,13 +25,15 @@
 /// file — just parameterised instead of static.
 ///
 /// `classifierServiceProvider` and `vadServiceProvider` have both been
-/// promoted to their primaries — a real trained model exists
-/// (`assets/models/`) for the former, and `speech/silero_vad_service.dart`
-/// is a real implementation (on-device Silero via `package:vad`, model
-/// bundled as an asset — see that file and `pubspec.yaml`'s asset entry) for
-/// the latter. Both fallback columns are now the *revert* direction, not the
-/// pending direction — `ThreeButtonFallback` is untouched and still exactly
-/// one line away if `SileroVadService` ever needs reverting.
+/// promoted to their primaries — `photo_pipeline/mlkit_classifier.dart`
+/// wraps Google ML Kit's on-device Image Labeling (no training required,
+/// see that file for why it replaced the Teachable Machine/TFLite model),
+/// and `speech/silero_vad_service.dart` is a real implementation (on-device
+/// Silero via `package:vad`, model bundled as an asset — see that file and
+/// `pubspec.yaml`'s asset entry) for the latter. Both fallback columns are
+/// now the *revert* direction, not the pending direction —
+/// `ThreeButtonFallback` and `TfliteClassifier` are both untouched and still
+/// exactly one line away if their primaries ever need reverting.
 library;
 
 import 'dart:async';
@@ -62,8 +64,8 @@ import 'package:temanku/speech/pronunciation_hint_service.dart';
 import 'package:temanku/speech/remote_articulation_hint_service.dart';
 import 'package:temanku/speech/silero_vad_service.dart';
 import 'package:temanku/speech/tts/cached_word_audio_service.dart';
-import 'package:temanku/speech/tts/edge_tts_source.dart';
 import 'package:temanku/speech/tts/word_audio_service.dart';
+import 'package:temanku/speech/tts/word_audio_source_impl.dart';
 import 'package:temanku/speech/vad_service.dart';
 
 // ---------------------------------------------------------------------------
@@ -122,15 +124,17 @@ final vadServiceProvider = Provider<VadService>((ref) {
   return service;
 });
 
-/// Promoted to its primary (Day 3) — `assets/models/makanan_classifier.tflite`
-/// exists now. `initialize()` is fire-and-forget here rather than awaited:
-/// `TfliteClassifier.suggestLabel` already treats "not loaded yet" exactly
-/// like "failed to load" (both return null, the same outcome
-/// `ManualLabelClassifier` always produces), so nothing needs to block on
-/// this resolving before the provider can be read.
+/// Promoted to its primary — `photo_pipeline/mlkit_classifier.dart`, on
+/// ML Kit's on-device Image Labeling. `initialize()` is fire-and-forget here
+/// rather than awaited: `MlKitClassifier.suggestLabel` already treats "not
+/// loaded yet" exactly like "failed to load" (both return null, the same
+/// outcome `ManualLabelClassifier` always produces), so nothing needs to
+/// block on this resolving before the provider can be read.
 ///
 /// Tripwire unchanged from the original plan: not reliably usable → revert
-/// this line to `ManualLabelClassifier()`. Decide once, move on.
+/// this line to `TfliteClassifier()` (still bundled, `photo_pipeline/
+/// tflite_classifier.dart`) or further to `ManualLabelClassifier()`. Decide
+/// once, move on.
 final classifierServiceProvider = Provider<ClassifierService>((ref) {
   final service = createClassifier();
   unawaited(service.initialize());
@@ -167,11 +171,13 @@ final pronunciationHintServiceProvider =
 /// trial (`speech/tts/word_audio_service.dart`).
 ///
 /// Keyed on the same `Child.pronunciationHintEnabled` flag as
-/// [pronunciationHintServiceProvider], for one reason: both talk to the same
-/// external host (`speech/articulation_backend.dart`), and the consent copy
-/// in `features/guardian/child_settings_screen.dart` covers that host. Adding
-/// a second network destination under a flag the guardian agreed to for a
-/// *different* purpose would make that consent inaccurate.
+/// [pronunciationHintServiceProvider], even though the two now talk to
+/// **different** external hosts — TTS goes straight to Microsoft's Edge TTS
+/// service (`speech/tts/edge_tts_source.dart`), scoring still goes to
+/// `speech/articulation_backend.dart`. One toggle, not two, because both are
+/// still one feature from the guardian's side: "speak-mode assistance," on
+/// or off. See `features/guardian/child_settings_screen.dart`'s doc comment
+/// for the consent copy that names both destinations explicitly.
 ///
 /// Note the asymmetry with scoring, which is real and intended: TTS sends
 /// only the word — a string the guardian typed themselves — and receives
@@ -182,7 +188,7 @@ final wordAudioServiceProvider =
     Provider.family<WordAudioService, bool>((ref, enabled) {
   if (!enabled) return const NoWordAudioService();
   final service = CachedWordAudioService(
-    source: EdgeTtsSource(),
+    source: createWordAudioSource(),
     soundService: ref.watch(soundServiceProvider),
   );
   ref.onDispose(service.dispose);

@@ -32,8 +32,13 @@ dependencies:
   image_picker: ^1.2.3
   image: ^4.9.1
 
-  # Primary classifier (§11, ADR-4) — TFLite MobileNet-class model exported
-  # from Teachable Machine. See `photo_pipeline/tflite_classifier.dart`.
+  # Primary classifier (§11, ADR-4) — on-device ML Kit Image Labeling, no
+  # training required. See `photo_pipeline/mlkit_classifier.dart`.
+  google_mlkit_image_labeling: ^0.15.0
+
+  # Revert-only classifier (ADR-4 fallback column) — TFLite MobileNet-class
+  # model exported from Teachable Machine, kept as the documented one-line
+  # revert in `core/service_locator.dart`. See `photo_pipeline/tflite_classifier.dart`.
   tflite_flutter: ^0.11.0
 
   # Pronunciation-hint layer (advisory only, opt-in per child — see
@@ -58,6 +63,13 @@ dependencies:
   # controlled correct/try-again/session-complete chimes only. No looping
   # background music anywhere in the app.
   audioplayers: ^6.1.0
+
+  # Spoken word model for speak mode (`speech/tts/edge_tts_source.dart`) —
+  # Microsoft Edge's neural TTS, called directly from the device. Unofficial
+  # protocol (same caveat as the Python edge-tts library it mirrors): pinned,
+  # not floated, and a sudden across-the-board TTS failure is the signal to
+  # check upstream before assuming a bug here.
+  flutter_edge_tts: ^0.0.2
 
   # NOTE: fonts are bundled as static asset files (below), not via google_fonts —
   # the app is offline-first (§11) and must not depend on a network fetch for type.

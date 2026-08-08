@@ -53,7 +53,7 @@ dependencies and each primary arrives as a one-line promotion:
 | Provider | Now | Swap to | When |
 |---|---|---|---|
 | `childRepositoryProvider` | `InMemoryChildRepository` | `FirestoreChildRepository` | IT-2, Day 1–2 |
-| `classifierServiceProvider` | `ManualLabelClassifier` | `TfliteClassifier` | IT-2, Day 3 · tripwire Day 3 evening |
+| `classifierServiceProvider` | `MlKitClassifier` (promoted) | `TfliteClassifier`, then `ManualLabelClassifier` | revert if ML Kit stops being reliable — no debate |
 | `vadServiceProvider` | `ThreeButtonFallback` | `SileroVadService` | IT-1, Day 4 · tripwire Day 4 midday |
 
 If you catch yourself writing `if (useFallback)` in a widget, come back here instead.
@@ -101,16 +101,23 @@ clipping guard catches.
 ## Speak mode and the external backend
 
 Speak mode is an **echoic** exercise: the app speaks the word, the child
-repeats it, an adult judges. Two of those three steps talk to a FastAPI
-service (`main.py`, wav2vec2 + Edge TTS) declared in
-`lib/speech/articulation_backend.dart` — **the only outbound network
-destination in the app**, and gated entirely behind
-`Child.pronunciationHintEnabled`.
+repeats it, an adult judges. Two of those three steps leave the device, to
+**two different destinations**, both gated entirely behind
+`Child.pronunciationHintEnabled`:
 
-| Direction | Endpoint | What crosses the wire |
+| Direction | Destination | What crosses the wire |
 |---|---|---|
-| Model the word | `GET /tts` | the word as text → MP3 back. **No microphone data.** |
-| Score the echo | `POST /score` | a clip of **the child's voice** → `{predicted_ipa, distance}` |
+| Model the word | Microsoft Edge TTS, direct from the device (`lib/speech/tts/edge_tts_source.dart`, `package:flutter_edge_tts`) | the word as text → MP3 back. **No microphone data.** |
+| Score the echo | our FastAPI service (`main.py`, wav2vec2), declared in `lib/speech/articulation_backend.dart` — the app's **only backend** | a clip of **the child's voice** → `{predicted_ipa, distance}` |
+
+TTS used to be a second endpoint on the same FastAPI service (`GET /tts`, a
+proxy in front of the same Microsoft service). It now calls Microsoft
+directly, which removes a network hop and takes TTS out of resource
+contention with the wav2vec2 model on the backend host — but it also means
+"the only outbound network destination" is no longer accurate to say about
+`articulation_backend.dart` alone. See that file's and
+`features/guardian/child_settings_screen.dart`'s doc comments for how the
+consent copy handles two hosts under one toggle.
 
 Four things to know before touching any of it:
 

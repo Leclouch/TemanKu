@@ -77,7 +77,7 @@ void main() {
 
     // The consent copy — explicit about audio leaving the device for this
     // feature only, distinct from the app's normal on-device-only handling.
-    expect(find.textContaining('server luar'), findsOneWidget);
+    expect(find.textContaining('layanan luar'), findsOneWidget);
     expect(find.textContaining('foto dan data lain'), findsOneWidget);
 
     await tester.tap(find.text('Batal'));

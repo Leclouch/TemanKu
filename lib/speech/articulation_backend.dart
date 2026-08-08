@@ -1,19 +1,22 @@
 /// Where the articulation backend lives, and the one header it needs.
 ///
-/// Shared by `remote_articulation_hint_service.dart` (`POST /score`) and
-/// `speech/tts/edge_tts_service.dart` (`GET /tts`) — two services against one
-/// host, so the host is declared once here rather than twice as a default
-/// argument.
+/// Used only by `remote_articulation_hint_service.dart` (`POST /score`) —
+/// **not** by `speech/tts/edge_tts_source.dart` any more. TTS used to be a
+/// second endpoint on this same host (`GET /tts`, a proxy in front of
+/// Microsoft's Edge TTS); it now calls Microsoft directly from the device,
+/// so this backend is scoring-only.
 ///
-/// **This is the only outbound network destination in the app.** Everything
-/// else — photos, ladder positions, session logs, the classifier, VAD — is
-/// on-device by design (§10/§11). Both services that use this host are gated
-/// behind `Child.pronunciationHintEnabled`, the guardian's explicit consent,
-/// and the consent copy in `features/guardian/child_settings_screen.dart`
-/// names exactly what leaves the device.
+/// **This is the only backend the app talks to**, and the only place a
+/// child's own voice ever leaves the device. Everything else — photos,
+/// ladder positions, session logs, the classifier, VAD — is on-device by
+/// design (§10/§11). TTS is a second, separate external destination
+/// (Microsoft's, not this one); both it and this backend are gated behind
+/// `Child.pronunciationHintEnabled`, the guardian's explicit consent, and
+/// the consent copy in `features/guardian/child_settings_screen.dart` names
+/// both by name.
 library;
 
-/// The FastAPI service in `main.py` — wav2vec2 phoneme scoring plus Edge TTS.
+/// The FastAPI service in `main.py` — wav2vec2 phoneme scoring.
 ///
 /// An ngrok tunnel, which means it is a **development address that changes
 /// whenever the tunnel restarts**. When the demo backend moves, this is the

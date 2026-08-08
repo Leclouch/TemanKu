@@ -5,22 +5,25 @@
 ///
 /// Source-of-truth §6/§10: the app is on-device-only by default for
 /// photos/session data. Speak-mode assistance is the **one deliberate
-/// exception**, and it now covers two distinct exchanges with the same
-/// external host (`speech/articulation_backend.dart`) — which is why the
-/// consent copy names both rather than only the one that existed first:
+/// exception**, and it covers two distinct exchanges with **two different**
+/// external hosts — which is why the consent copy names both rather than
+/// only the one that existed first:
 ///
-///   - **the spoken example** (`GET /tts`) — the app sends the *word*, a
-///     string the guardian typed themselves, and receives audio to play.
-///     No microphone data is involved in this direction at all.
-///   - **pronunciation scoring** (`POST /score`) — a short recording of the
-///     **child's own voice** is uploaded. This is the consequential one, and
-///     the copy leads with it for that reason.
+///   - **the spoken example** (`speech/tts/edge_tts_source.dart`) — the app
+///     sends the *word*, a string the guardian typed themselves, straight to
+///     Microsoft's Edge TTS service, and receives audio to play. No
+///     microphone data is involved in this direction at all.
+///   - **pronunciation scoring** (`speech/articulation_backend.dart`,
+///     `POST /score`) — a short recording of the **child's own voice** is
+///     uploaded to our own backend. This is the consequential one, and the
+///     copy leads with it for that reason.
 ///
-/// Both ride the same `Child.pronunciationHintEnabled` flag deliberately: one
-/// host, one consent. Splitting them into two toggles would let a guardian
-/// agree to "just the examples" while the app still held a live path to the
-/// same server, which is a distinction the consent copy could not honestly
-/// explain.
+/// Both still ride the same `Child.pronunciationHintEnabled` flag, even
+/// though the hosts differ: from the guardian's side this is one feature —
+/// "speak-mode assistance," on or off — not two. Splitting it into two
+/// toggles because the destinations happen to differ would trade one honest
+/// distinction (whose data, whose stakes) for a technical one the guardian
+/// has no way to evaluate.
 library;
 
 import 'package:flutter/material.dart';
@@ -37,11 +40,13 @@ const _consentTitle = 'Aktifkan bantuan mode bicara?';
 /// doc comment for why they share one toggle, and why the recording is
 /// stated first.
 const _consentBody =
-    'Kalau diaktifkan, dua hal terhubung ke server luar pada mode bicara:\n\n'
-    '1. Rekaman suara anak dikirim untuk dinilai kemiripan pengucapannya. '
-    'Hasilnya hanya jadi saran — wali tetap yang menentukan benar atau salah.\n\n'
-    '2. Nama benda dikirim sebagai teks, lalu aplikasi menerima suara contoh '
-    'untuk diperdengarkan ke anak. Mikrofon tidak dipakai untuk bagian ini.\n\n'
+    'Kalau diaktifkan, dua hal terhubung ke layanan luar pada mode bicara:\n\n'
+    '1. Rekaman suara anak dikirim ke server kami untuk dinilai kemiripan '
+    'pengucapannya. Hasilnya hanya jadi saran — wali tetap yang menentukan '
+    'benar atau salah.\n\n'
+    '2. Nama benda dikirim sebagai teks ke layanan suara Microsoft, lalu '
+    'aplikasi menerima suara contoh untuk diperdengarkan ke anak. Mikrofon '
+    'tidak dipakai untuk bagian ini.\n\n'
     'Ini berbeda dari, dan tidak mengubah, cara aplikasi menyimpan foto dan '
     'data lain — yang selalu tetap di perangkat.';
 
@@ -171,9 +176,10 @@ class _ChildSettingsScreenState extends ConsumerState<ChildSettingsScreen> {
                         // legible afterwards, not fade into the card.
                         const _NoticePanel(
                           icon: Icons.cloud_upload_outlined,
-                          text: 'Rekaman suara anak dan nama benda dikirim ke '
-                              'server luar untuk fitur ini. Foto dan data lain '
-                              'tetap hanya di perangkat.',
+                          text: 'Rekaman suara anak dikirim ke server kami, dan '
+                              'nama benda dikirim ke layanan suara Microsoft, '
+                              'untuk fitur ini. Foto dan data lain tetap hanya '
+                              'di perangkat.',
                         ),
                       ],
                     ],
