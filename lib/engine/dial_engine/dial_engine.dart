@@ -19,11 +19,10 @@ import 'package:temanku/data/models/child.dart';
 abstract class DialEngine {
   /// The next position after the child met the advancement criterion at [current].
   ///
-  /// Expected shape (TODO(IT-1) to implement and test):
-  ///   - array < 4          → array + 1, similarity unchanged
-  ///   - array == 4         → similarity steps up **and array resets to 2**
-  ///   - similarity == lrffc and array == 4 → [current] (top of the ladder;
-  ///     there is no step 11, and no artificial ceiling behaviour beyond staying put)
+  /// Expected shape:
+  ///   - arrays below 4 grow by one within their current similarity tier;
+  ///   - arrays at 4 step similarity up and reset to 2, except LRFFC;
+  ///   - LRFFC grows from 4 to 6, then remains at 6.
   LadderPosition advance(LadderPosition current);
 
   /// Speak mode has no array (§4.4), so [advance] on a speak-mode position must
@@ -34,23 +33,31 @@ abstract class DialEngine {
   /// How many distractors to compose for [position]. Zero in speak mode.
   int distractorCountFor(LadderPosition position, ResponseMode mode);
 
-  /// True when [position] is the fixed point [advance]/[advanceForMode] would
-  /// return unchanged for [mode] — "top of the ladder" (§4.5), the same
-  /// condition each of those already checks, surfaced here so a caller can
-  /// ask *before* advancing whether a streak clearing at [position] would be
-  /// mastery-at-ceiling rather than an ordinary step up.
+  /// How many targets to compose for [position]. Zero in speak mode.
+  int targetCountFor(LadderPosition position, ResponseMode mode);
+
+  /// True at the mastery-celebration milestone for [mode]. It is deliberately
+  /// distinct from the extended LRFFC advancement fixed point so callers can
+  /// trigger the celebration at array 4 while allowing later practice.
   bool isAtCeiling(LadderPosition position, ResponseMode mode);
 }
 
 class TwoDialEngine implements DialEngine {
   const TwoDialEngine();
 
+  static const int multiTargetCount = 2;
+
   @override
   LadderPosition advance(LadderPosition current) {
-    // Top of the ladder: lrffc at array 4 is a fixed point, no step 11.
+    // Extended LRFFC practice stops at array six.
     if (current.similarityTier == SimilarityTier.lrffc &&
-        current.arraySize == ArraySize.max) {
+        current.arraySize == ArraySize.extendedMax) {
       return current;
+    }
+
+    if (current.similarityTier == SimilarityTier.lrffc &&
+        current.arraySize >= ArraySize.max) {
+      return current.copyWith(arraySize: current.arraySize + 1);
     }
 
     // Array dial moves first, one step at a time, regardless of tier.
@@ -83,7 +90,18 @@ class TwoDialEngine implements DialEngine {
   @override
   int distractorCountFor(LadderPosition position, ResponseMode mode) {
     if (mode == ResponseMode.speak) return 0;
-    return position.arraySize - 1;
+    return position.arraySize - targetCountFor(position, mode);
+  }
+
+  @override
+  int targetCountFor(LadderPosition position, ResponseMode mode) {
+    if (mode == ResponseMode.speak) return 0;
+    if (mode == ResponseMode.tap &&
+        position.similarityTier == SimilarityTier.lrffc &&
+        position.arraySize > ArraySize.max) {
+      return multiTargetCount;
+    }
+    return 1;
   }
 
   @override
@@ -93,6 +111,8 @@ class TwoDialEngine implements DialEngine {
       // similarity for it, so the ceiling condition mirrors that exactly.
       return position.similarityTier == SimilarityTier.lrffc;
     }
+    // Array four remains the celebrated mastery milestone; five and six are
+    // additional LRFFC practice positions rather than ceiling positions.
     return position.similarityTier == SimilarityTier.lrffc &&
         position.arraySize == ArraySize.max;
   }

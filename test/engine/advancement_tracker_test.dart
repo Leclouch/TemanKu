@@ -197,25 +197,21 @@ void main() {
     expect(child2Streak, 2);
   });
 
-  test('reaching the ceiling this call is not masteredAtCeiling — only '
-      'clearing the streak again once already there is', () async {
+  test('only clearing a streak at LRFFC array 4 triggers mastery', () async {
     final persistence = LadderPersistence(InMemoryChildRepository(seed: false));
-    // One array step below the true ceiling — lrffc tier, array not yet
-    // maxed. Clearing the streak from here lands exactly on the ceiling
-    // (arraySize 4, lrffc) for the first time.
+    // Array four is the celebrated milestone despite the extended practice.
     await persistence.save(
       childId: childId,
       module: module,
       mode: mode,
-      position: const LadderPosition(arraySize: 3, similarityTier: SimilarityTier.lrffc),
+      position: const LadderPosition(
+          arraySize: 4, similarityTier: SimilarityTier.lrffc),
     );
     final trackerAtCeiling = AdvancementTracker(
       dialEngine: const TwoDialEngine(),
       persistence: persistence,
     );
 
-    // First cleared streak: the position handed in is one step below the
-    // ceiling fixed point, so this call is "reaching" it, not "already there".
     AdvancementResult? result;
     for (var i = 0; i < requiredStreakForAdvancement; i++) {
       result = await trackerAtCeiling.recordResponse(
@@ -226,11 +222,13 @@ void main() {
         hintShown: false,
       );
     }
-    expect(result?.position, const LadderPosition(arraySize: 4, similarityTier: SimilarityTier.lrffc));
-    expect(result?.masteredAtCeiling, false);
+    expect(
+        result?.position,
+        const LadderPosition(
+            arraySize: 5, similarityTier: SimilarityTier.lrffc));
+    expect(result?.masteredAtCeiling, true);
 
-    // Second cleared streak, still at the same fixed point: now it is
-    // "demonstrating the criterion again once already there".
+    // LRFFC arrays five and six do not trigger mastery again.
     for (var i = 0; i < requiredStreakForAdvancement; i++) {
       result = await trackerAtCeiling.recordResponse(
         childId: childId,
@@ -240,7 +238,26 @@ void main() {
         hintShown: false,
       );
     }
-    expect(result?.masteredAtCeiling, true);
+    expect(
+        result?.position,
+        const LadderPosition(
+            arraySize: 6, similarityTier: SimilarityTier.lrffc));
+    expect(result?.masteredAtCeiling, false);
+
+    for (var i = 0; i < requiredStreakForAdvancement; i++) {
+      result = await trackerAtCeiling.recordResponse(
+        childId: childId,
+        module: module,
+        mode: mode,
+        correct: true,
+        hintShown: false,
+      );
+    }
+    expect(
+        result?.position,
+        const LadderPosition(
+            arraySize: 6, similarityTier: SimilarityTier.lrffc));
+    expect(result?.masteredAtCeiling, false);
   });
 
   test('speak mode is at ceiling on similarity alone, array size ignored',
@@ -251,7 +268,8 @@ void main() {
       module: module,
       mode: ResponseMode.speak,
       // arraySize is irrelevant to speak mode (§4.4 has no array) — 2, not 4.
-      position: const LadderPosition(arraySize: 2, similarityTier: SimilarityTier.lrffc),
+      position: const LadderPosition(
+          arraySize: 2, similarityTier: SimilarityTier.lrffc),
     );
     final speakTracker = AdvancementTracker(
       dialEngine: const TwoDialEngine(),
