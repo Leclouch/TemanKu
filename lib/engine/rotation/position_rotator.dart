@@ -25,6 +25,21 @@ abstract class PositionRotator {
     required int targetSlot,
   });
 
+  /// Assigns distinct slots for multiple target items. The first target uses
+  /// the standard repeat guard; the remaining targets fill unused slots.
+  List<int> nextTargetSlots({
+    required int arraySize,
+    required int count,
+    required List<int> recentPrimaryTargetSlots,
+  });
+
+  /// A full shuffled slot assignment for a trial with multiple targets.
+  /// Target item indices 0..targetSlots.length-1 are placed at [targetSlots].
+  List<int> shuffleSlotsMulti({
+    required int arraySize,
+    required List<int> targetSlots,
+  });
+
   /// Match-mode target *zone* rotation (§4.4: "match-mode target zones rotate
   /// too", not just the items). Kept as its own function because the item
   /// array and the drop zones rotate independently, but the guard is the same
@@ -56,6 +71,45 @@ class GuardedPositionRotator implements PositionRotator {
     for (var slot = 0; slot < arraySize; slot++) {
       if (slot == targetSlot) continue;
       slots[slot] = distractorIndices[next++];
+    }
+    return slots;
+  }
+
+  @override
+  List<int> nextTargetSlots({
+    required int arraySize,
+    required int count,
+    required List<int> recentPrimaryTargetSlots,
+  }) {
+    final firstTargetSlot = nextTargetSlot(
+      arraySize: arraySize,
+      recentTargetSlots: recentPrimaryTargetSlots,
+    );
+    final remainingSlots = [
+      for (var slot = 0; slot < arraySize; slot++)
+        if (slot != firstTargetSlot) slot,
+    ]..shuffle();
+    return [firstTargetSlot, ...remainingSlots.take(count - 1)];
+  }
+
+  @override
+  List<int> shuffleSlotsMulti({
+    required int arraySize,
+    required List<int> targetSlots,
+  }) {
+    final targetSlotSet = targetSlots.toSet();
+    final remainingItemIndices = [
+      for (var index = targetSlots.length; index < arraySize; index++) index,
+    ]..shuffle();
+
+    final slots = List<int>.filled(arraySize, -1);
+    for (var itemIndex = 0; itemIndex < targetSlots.length; itemIndex++) {
+      slots[targetSlots[itemIndex]] = itemIndex;
+    }
+    var nextItem = 0;
+    for (var slot = 0; slot < arraySize; slot++) {
+      if (targetSlotSet.contains(slot)) continue;
+      slots[slot] = remainingItemIndices[nextItem++];
     }
     return slots;
   }
