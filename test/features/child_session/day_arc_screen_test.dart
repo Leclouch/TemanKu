@@ -66,7 +66,13 @@ void main() {
     await tester.pumpWidget(_buildApp(childRepo, child.id));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Sari'), findsOneWidget);
+    // Exact match, not `textContaining` — the mascot's story-beat line
+    // (`lib/story/`, on by the offline default `NoStorytellerService`) also
+    // mentions the child's name in a full sentence, so a substring match now
+    // finds two widgets. The headline itself is still a literal, findable
+    // `Text(child.name)` (see `day_arc_screen.dart`'s own doc comment on why
+    // that stayed a separate widget rather than a `TextSpan`).
+    expect(find.text('Sari'), findsOneWidget);
     expect(find.text(_kantinFraming), findsOneWidget);
     expect(find.text(_rumahFraming), findsOneWidget);
 
@@ -156,6 +162,43 @@ void main() {
     // Still on the day-arc screen — no stub destination appeared.
     expect(find.text(_kantinFraming), findsOneWidget);
     expect(find.text('tap-screen:makanan'), findsNothing);
+  });
+
+  testWidgets('no story-beat pill when Child.storytellerEnabled is false (the default)',
+      (tester) async {
+    final childRepo = InMemoryChildRepository(seed: false);
+    final child = await childRepo.createChild(name: 'Arif', availableModes: {ResponseMode.tap});
+    expect(child.storytellerEnabled, isFalse);
+
+    await tester.pumpWidget(_buildApp(childRepo, child.id));
+    await tester.pumpAndSettle();
+
+    // NoStorytellerService (the offline default) always has *something* it
+    // could say — this asserts the day-arc screen never even asks it to,
+    // per `_loadStoryBeat`'s own consent-gate comment. A regression here
+    // would mean the guardian's "Cerita maskot" toggle stopped doing
+    // anything until an API key also existed.
+    expect(find.textContaining('petualangan'), findsNothing);
+    expect(find.textContaining(child.name), findsOneWidget);
+  });
+
+  testWidgets('shows a mascot story-beat pill once the guardian opts in', (tester) async {
+    final childRepo = InMemoryChildRepository(seed: false);
+    final created = await childRepo.createChild(
+      name: 'Arif',
+      availableModes: {ResponseMode.tap},
+    );
+    final child = created.copyWith(storytellerEnabled: true);
+    await childRepo.updateChild(child);
+
+    await tester.pumpWidget(_buildApp(childRepo, child.id));
+    await tester.pumpAndSettle();
+
+    // Content comes from NoStorytellerService's own templates
+    // (`lib/story/no_storyteller_service.dart`) — checking for "Arif"
+    // appearing a second time (beyond the headline) is enough to prove the
+    // pill rendered, without coupling this test to exact template wording.
+    expect(find.textContaining(child.name), findsNWidgets(2));
   });
 
   testWidgets('the exit dot pops the session route', (tester) async {

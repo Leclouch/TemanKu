@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import 'package:temanku/content/keluarga/keluarga_module.dart';
 import 'package:temanku/content/makanan/makanan_module.dart';
@@ -59,33 +60,52 @@ class GuardianHomePlaceholder extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final colors = context.colors;
     return TkScreen(
       title: 'Catatan wali',
+      decor: const TkScreenDecor(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          TkSection(
-            label: 'Persiapan',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _IntakeEntryPoint(childId: childId),
-                _UploadEntryPoint(childId: childId),
-                _SettingsEntryPoint(childId: childId),
-              ],
+          // Each section sits on its own faint colour zone rather than the
+          // bare cream ground — the same "each page/section owns a colour"
+          // move the reference site makes at full-bleed scale
+          // (`referenceimages/maxima9.png`, `maxima13.png`), scaled down to
+          // section width here. Orange for "do this once", blue for "read
+          // this" — the same split `_CardIcon`'s tone already draws below.
+          _SectionZone(
+            tint: colors.primaryAccentWash,
+            child: TkSection(
+              label: 'Persiapan',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _IntakeEntryPoint(childId: childId),
+                  _UploadEntryPoint(childId: childId),
+                  _SettingsEntryPoint(childId: childId),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: TkSpace.lg),
-          TkSection(
-            label: 'Catatan',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _SessionRecapCard(childId: childId),
-                _FullDataCard(childId: childId),
-                _MilestoneTimeline(childId: childId),
-                _SessionHistory(childId: childId),
-              ],
+          _SectionZone(
+            // 0.08 read as grey, not blue, against the cream ground — too
+            // weak a tint to carry a hue at this fill area. 0.18 is the
+            // point it visually balances the orange zone above, which reads
+            // through a hand-picked opaque wash token rather than a derived
+            // alpha.
+            tint: colors.info.withValues(alpha: 0.18),
+            child: TkSection(
+              label: 'Catatan',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _SessionRecapCard(childId: childId),
+                  _FullDataCard(childId: childId),
+                  _MilestoneTimeline(childId: childId),
+                  _SessionHistory(childId: childId),
+                ],
+              ),
             ),
           ),
         ],
@@ -125,10 +145,10 @@ class _IntakeEntryPoint extends StatelessWidget {
       title: 'Intake',
       subtitle: 'Satu pertanyaan per mode. Memilih mode yang tersedia — '
           'bukan memperkirakan level.',
-      leading: const _CardIcon(icon: Icons.assignment_outlined),
+      leading: const _CardIcon(icon: LucideIcons.clipboardPen),
       child: TkButton.secondary(
         label: 'Isi intake',
-        icon: Icons.arrow_forward,
+        icon: LucideIcons.arrowRight,
         onPressed: () => context.push(Routes.intakeFor(childId)),
       ),
     );
@@ -150,10 +170,10 @@ class _SettingsEntryPoint extends StatelessWidget {
       title: 'Pengaturan anak',
       subtitle: 'Bantuan mode bicara (contoh ucapan + saran pengucapan) dan '
           'pengaturan suara per anak.',
-      leading: const _CardIcon(icon: Icons.tune_outlined),
+      leading: const _CardIcon(icon: LucideIcons.slidersHorizontal),
       child: TkButton.secondary(
         label: 'Buka pengaturan',
-        icon: Icons.arrow_forward,
+        icon: LucideIcons.arrowRight,
         onPressed: () => context.push(Routes.childSettingsFor(childId)),
       ),
     );
@@ -175,7 +195,7 @@ class _UploadEntryPoint extends StatelessWidget {
       title: 'Foto',
       subtitle: 'Quality gate dan ajakan variasi (lima foto berbeda — '
           'anjuran, bukan syarat).',
-      leading: const _CardIcon(icon: Icons.add_a_photo_outlined),
+      leading: const _CardIcon(icon: LucideIcons.imagePlus),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -210,7 +230,7 @@ class _UploadEntryPoint extends StatelessWidget {
               for (final module in ModuleId.values)
                 TkButton.quiet(
                   label: _displayNameFor(module),
-                  icon: Icons.photo_library_outlined,
+                  icon: LucideIcons.images,
                   onPressed: () => context.push(Routes.photoLibraryFor(childId, module)),
                 ),
             ],
@@ -221,26 +241,55 @@ class _UploadEntryPoint extends StatelessWidget {
   }
 }
 
+/// A section's faint colour ground — see the call sites above for why.
+/// Padding is intentionally generous so the tint reads as a zone the cards
+/// sit *in*, not a border hugging them.
+class _SectionZone extends StatelessWidget {
+  const _SectionZone({required this.tint, required this.child});
+
+  final Color tint;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(TkSpace.sm),
+      decoration: BoxDecoration(color: tint, borderRadius: TkRadius.lg),
+      child: child,
+    );
+  }
+}
+
 /// The tinted glyph plate every card on this screen leads with.
 ///
 /// Scanning a column of same-shaped cards by their titles alone is slow; a
-/// distinct silhouette per card gives the eye somewhere to land first.
+/// distinct silhouette per card gives the eye somewhere to land first — which
+/// only works if the plates don't all share one colour. [accent] defaults to
+/// the orange "do this" tone for the "Persiapan" section; the "Catatan"
+/// section (read-only, past tense) passes [_CardIconAccent.info] instead, so
+/// the two card groups the screen's own doc comment describes ("things I do
+/// once" vs "things I come back to read") are visually, not just spatially,
+/// distinct.
+enum _CardIconAccent { primary, info }
+
 class _CardIcon extends StatelessWidget {
-  const _CardIcon({required this.icon});
+  const _CardIcon({required this.icon, this.accent = _CardIconAccent.primary});
 
   final IconData icon;
+  final _CardIconAccent accent;
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
+    final (fill, ink) = switch (accent) {
+      _CardIconAccent.primary => (c.primaryAccentWash, c.primaryAccent),
+      _CardIconAccent.info => (c.info.withValues(alpha: 0.14), c.info),
+    };
     return Container(
       width: 40,
       height: 40,
-      decoration: BoxDecoration(
-        color: c.primaryAccentWash,
-        borderRadius: TkRadius.sm,
-      ),
-      child: Icon(icon, size: 21, color: c.primaryAccent),
+      decoration: BoxDecoration(color: fill, borderRadius: TkRadius.sm),
+      child: Icon(icon, size: 21, color: ink),
     );
   }
 }
@@ -260,7 +309,7 @@ class _SessionRecapCard extends ConsumerWidget {
     final sessions = ref.watch(sessionRepositoryProvider);
     return TkCard(
       title: 'Ringkasan sesi',
-      leading: const _CardIcon(icon: Icons.notes_outlined),
+      leading: const _CardIcon(icon: LucideIcons.notebookPen, accent: _CardIconAccent.info),
       child: FutureBuilder<List<SessionSummary>>(
         future: sessions.getSessionHistory(childId, limit: 1),
         builder: (context, snapshot) {
@@ -538,7 +587,7 @@ class _MilestoneTimeline extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return TkCard(
       title: 'Perjalanan',
-      leading: const _CardIcon(icon: Icons.timeline_outlined),
+      leading: const _CardIcon(icon: LucideIcons.route, accent: _CardIconAccent.info),
       child: FutureBuilder<List<_MilestoneEntry>>(
         future: _loadMilestones(ref, childId),
         builder: (context, snapshot) {
@@ -614,7 +663,7 @@ class _SessionHistory extends ConsumerWidget {
     final sessions = ref.watch(sessionRepositoryProvider);
     return TkCard(
       title: 'Riwayat',
-      leading: const _CardIcon(icon: Icons.history_outlined),
+      leading: const _CardIcon(icon: LucideIcons.history, accent: _CardIconAccent.info),
       child: FutureBuilder<List<SessionSummary>>(
         future: sessions.getSessionHistory(childId),
         builder: (context, snapshot) {

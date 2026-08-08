@@ -18,6 +18,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import 'package:temanku/core/constants/domain_enums.dart';
 import 'package:temanku/core/routing/app_router.dart';
@@ -123,6 +124,7 @@ class _IntakeScreenState extends ConsumerState<IntakeScreen> {
       return TkScreen(
         title: 'Intake',
         maxWidth: TemanKuMetrics.contentMaxWidth,
+        decor: const TkScreenDecor(),
         child: _ConfirmationStep(
           onDone: () => context.go(Routes.guardianFor(widget.childId)),
         ),
@@ -132,6 +134,7 @@ class _IntakeScreenState extends ConsumerState<IntakeScreen> {
     return TkScreen(
       title: 'Intake',
       maxWidth: TemanKuMetrics.contentMaxWidth,
+      decor: const TkScreenDecor(),
       // The question list owns its own scrolling so the step indicator stays
       // pinned at the top and the Back/Next pair stays pinned at the bottom —
       // a stepped flow whose controls scroll away is a flow you can get lost in.
@@ -260,7 +263,7 @@ class _ConfirmationStep extends StatelessWidget {
               shape: BoxShape.circle,
             ),
             child: Icon(
-              Icons.check_rounded,
+              LucideIcons.check,
               size: 40,
               color: colors.text,
             ),

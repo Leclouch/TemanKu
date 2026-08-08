@@ -19,6 +19,7 @@ class Child {
     required this.availableModes,
     this.diagnosisStatus,
     this.pronunciationHintEnabled = false,
+    this.storytellerEnabled = false,
   });
 
   final String id;
@@ -46,11 +47,26 @@ class Child {
   /// whether a hint line may appear next to the guardian's own ✅/❌.
   final bool pronunciationHintEnabled;
 
+  /// Per-child consent for the storyteller feature (`lib/story/`) — an
+  /// optional narrative line, in the mascot's voice, that turns session
+  /// progression into a small ongoing "chapter" for the child. Default
+  /// **off**, same consent shape as [pronunciationHintEnabled]: only when
+  /// true does `core/service_locator.dart` ever bind a network-backed
+  /// [StorytellerService] instead of the local, offline [NoStorytellerService]
+  /// — see `features/guardian/child_settings_screen.dart` for the copy shown
+  /// before it can be set true.
+  ///
+  /// Strictly flavor text (§12-equivalent for this feature): the storyteller
+  /// never reads or writes the ladder, never scores the child, and its output
+  /// is never shown anywhere the guardian's own judgment belongs.
+  final bool storytellerEnabled;
+
   Child copyWith({
     String? name,
     Set<ResponseMode>? availableModes,
     DiagnosisStatus? diagnosisStatus,
     bool? pronunciationHintEnabled,
+    bool? storytellerEnabled,
   }) =>
       Child(
         id: id,
@@ -58,6 +74,7 @@ class Child {
         availableModes: availableModes ?? this.availableModes,
         diagnosisStatus: diagnosisStatus ?? this.diagnosisStatus,
         pronunciationHintEnabled: pronunciationHintEnabled ?? this.pronunciationHintEnabled,
+        storytellerEnabled: storytellerEnabled ?? this.storytellerEnabled,
       );
 }
 

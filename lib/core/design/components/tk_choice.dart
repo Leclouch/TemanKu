@@ -7,6 +7,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import 'package:temanku/core/design/theme.dart';
 import 'package:temanku/core/design/tokens.dart';
@@ -75,7 +76,7 @@ class TkChoiceTile<T> extends StatelessWidget {
               child: Row(
                 children: [
                   Icon(
-                    selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                    selected ? LucideIcons.circleDot : LucideIcons.circle,
                     color: selected ? c.primaryAccent : c.textMuted,
                   ),
                   const SizedBox(width: TkSpace.sm),

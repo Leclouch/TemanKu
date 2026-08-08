@@ -34,6 +34,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import 'package:temanku/content/keluarga/keluarga_module.dart';
 import 'package:temanku/content/makanan/makanan_module.dart';
@@ -262,9 +263,10 @@ class _PhotoUploadScreenState extends ConsumerState<PhotoUploadScreen> {
     return TkScreen(
       title: 'Tambah foto · ${definition.displayName}',
       maxWidth: TemanKuMetrics.contentMaxWidth,
+      decor: const TkScreenDecor(),
       actions: [
         IconButton(
-          icon: const Icon(Icons.photo_library_outlined),
+          icon: const Icon(LucideIcons.images),
           tooltip: 'Lihat semua foto',
           onPressed: () => context.push(Routes.photoLibraryFor(widget.childId, widget.module)),
         ),
@@ -461,12 +463,12 @@ class _CategoryPicker extends StatelessWidget {
             ButtonSegment(
               value: PhotoCategory.target,
               label: Text(definition.targetCategoryLabel),
-              icon: Icon(Icons.circle, size: 12, color: definition.targetStyle.color),
+              icon: Icon(LucideIcons.circle, size: 12, color: definition.targetStyle.color),
             ),
             ButtonSegment(
               value: PhotoCategory.distractor,
               label: Text(definition.distractorCategoryLabel),
-              icon: Icon(Icons.circle, size: 12, color: definition.distractorStyle.color),
+              icon: Icon(LucideIcons.circle, size: 12, color: definition.distractorStyle.color),
             ),
           ],
           selected: {value},
@@ -563,14 +565,14 @@ class _CaptureButtons extends StatelessWidget {
       children: [
         TkButton(
           label: retrying ? 'Coba lagi dengan kamera' : 'Ambil foto',
-          icon: Icons.photo_camera_outlined,
+          icon: LucideIcons.camera,
           onPressed: enabled ? onCamera : null,
           expand: true,
         ),
         const SizedBox(height: TkSpace.sm),
         TkButton.secondary(
           label: retrying ? 'Pilih foto lain dari galeri' : 'Pilih dari galeri',
-          icon: Icons.photo_library_outlined,
+          icon: LucideIcons.images,
           onPressed: enabled ? onGallery : null,
           expand: true,
         ),
@@ -612,7 +614,7 @@ class _RetakeBanner extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.refresh, color: colors.text, size: 20),
+          Icon(LucideIcons.refreshCw, color: colors.text, size: 20),
           const SizedBox(width: TkSpace.sm),
           Expanded(
             child: Text(message, style: context.type.bodySm.copyWith(color: colors.text)),
@@ -657,7 +659,7 @@ class _SavedNudge extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.check_circle, color: colors.text, size: 20),
+              Icon(LucideIcons.circleCheck, color: colors.text, size: 20),
               const SizedBox(width: TkSpace.sm),
               Expanded(
                 child: Text(
@@ -666,7 +668,7 @@ class _SavedNudge extends StatelessWidget {
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.close),
+                icon: const Icon(LucideIcons.x),
                 tooltip: 'Tutup',
                 onPressed: onDismiss,
                 iconSize: 18,

@@ -71,6 +71,17 @@ dependencies:
   # check upstream before assuming a bug here.
   flutter_edge_tts: ^0.0.2
 
+  # Icon set — the ONE family the app draws icons from (design redesign pass,
+  # see `referenceimages/instruksi-decor-icon-mascot.md`). MIT-licensed,
+  # bundled as vector code (no asset download), consistent stroke weight —
+  # replaces ad-hoc `Icons.*_outlined` calls, which were mixing whatever
+  # Material's default outlined family happened to ship. `phosphor_flutter`
+  # was tried first (instruksi doc's other suggested option) but its
+  # `PhosphorIconData extends IconData` doesn't compile against this SDK —
+  # `IconData` became a `final` class upstream. Lucide's icons are plain
+  # `IconData` constants, so this has no such ceiling.
+  lucide_icons_flutter: ^3.1.15
+
   # NOTE: fonts are bundled as static asset files (below), not via google_fonts —
   # the app is offline-first (§11) and must not depend on a network fetch for type.
 

@@ -12,6 +12,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import 'package:temanku/content/keluarga/keluarga_module.dart';
 import 'package:temanku/content/makanan/makanan_module.dart';
@@ -41,6 +42,7 @@ class PhotoLibraryScreen extends ConsumerWidget {
 
     return TkScreen(
       title: 'Foto · ${definition.displayName}',
+      decor: const TkScreenDecor(),
       child: StreamBuilder<List<Photo>>(
         stream: repo.watchPhotos(childId: childId, module: module),
         builder: (context, snapshot) {
@@ -50,7 +52,7 @@ class PhotoLibraryScreen extends ConsumerWidget {
           if (photos.isEmpty) {
             return const TkEmptyState(
               message: 'Belum ada foto tersimpan.',
-              icon: Icons.photo_library_outlined,
+              icon: LucideIcons.images,
             );
           }
 
@@ -189,7 +191,7 @@ class _PhotoTile extends ConsumerWidget {
                           width: TkStroke.hairline,
                         ),
                       ),
-                      child: Icon(Icons.more_vert, size: 16, color: colors.text),
+                      child: Icon(LucideIcons.ellipsisVertical, size: 16, color: colors.text),
                     ),
                     onSelected: (action) {
                       switch (action) {

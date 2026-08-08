@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import 'package:temanku/core/constants/domain_enums.dart';
 import 'package:temanku/core/design/design.dart';
@@ -34,6 +35,7 @@ class SelectChildScreen extends ConsumerWidget {
 
     return TkScreen(
       title: 'Pilih anak',
+      decor: const TkScreenDecor(),
       child: StreamBuilder<List<Child>>(
         stream: repo.watchChildren(),
         builder: (context, snapshot) {
@@ -43,7 +45,7 @@ class SelectChildScreen extends ConsumerWidget {
           if (children.isEmpty) {
             return const TkEmptyState(
               message: 'Belum ada profil anak.',
-              icon: Icons.person_outline,
+              icon: LucideIcons.user,
             );
           }
 
@@ -79,7 +81,7 @@ class _ChildCard extends StatelessWidget {
       title: child.name,
       leading: _Avatar(name: child.name),
       onTap: onOpen,
-      trailing: Icon(Icons.chevron_right, color: c.textMuted),
+      trailing: Icon(LucideIcons.chevronRight, color: c.textMuted),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -115,28 +117,28 @@ class _ChildCard extends StatelessWidget {
             children: [
               TkButton.quiet(
                 label: 'Menunjuk',
-                icon: Icons.touch_app_outlined,
+                icon: LucideIcons.pointer,
                 onPressed: () => context.push(
                   Routes.tapSessionFor(child.id, ModuleId.makanan),
                 ),
               ),
               TkButton.quiet(
                 label: 'Mencocokkan',
-                icon: Icons.extension_outlined,
+                icon: LucideIcons.puzzle,
                 onPressed: () => context.push(
                   Routes.matchSessionFor(child.id, ModuleId.makanan),
                 ),
               ),
               TkButton.quiet(
                 label: 'Mengucap',
-                icon: Icons.mic_outlined,
+                icon: LucideIcons.micVocal,
                 onPressed: () => context.push(
                   Routes.speakSessionFor(child.id, ModuleId.makanan),
                 ),
               ),
               TkButton.quiet(
                 label: 'Catatan wali',
-                icon: Icons.menu_book_outlined,
+                icon: LucideIcons.notebookText,
                 onPressed: () => context.push(Routes.guardianFor(child.id)),
               ),
             ],
@@ -147,9 +149,9 @@ class _ChildCard extends StatelessWidget {
   }
 
   IconData _iconFor(ResponseMode mode) => switch (mode) {
-        ResponseMode.tap => Icons.touch_app_outlined,
-        ResponseMode.match => Icons.extension_outlined,
-        ResponseMode.speak => Icons.mic_outlined,
+        ResponseMode.tap => LucideIcons.pointer,
+        ResponseMode.match => LucideIcons.puzzle,
+        ResponseMode.speak => LucideIcons.micVocal,
       };
 }
 
@@ -166,17 +168,18 @@ class _Avatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     final initial = name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase();
+    // A solid-filled circle, not a tinted square — the same "own its colour"
+    // move `day_arc_screen.dart`'s module cards make, borrowed from the
+    // solid circular avatar marks in the Maxima reference rather than the
+    // low-contrast tint every other plate in the old design used.
     return Container(
-      width: 44,
-      height: 44,
+      width: 48,
+      height: 48,
       alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: c.primaryAccentWash,
-        borderRadius: TkRadius.sm,
-      ),
+      decoration: BoxDecoration(color: c.primaryAccent, shape: BoxShape.circle),
       child: Text(
         initial,
-        style: context.type.title.copyWith(color: c.primaryAccent),
+        style: context.type.titleLg.copyWith(color: tkInkOn(c.primaryAccent)),
       ),
     );
   }

@@ -63,6 +63,9 @@ import 'package:temanku/speech/no_hint_service.dart';
 import 'package:temanku/speech/pronunciation_hint_service.dart';
 import 'package:temanku/speech/remote_articulation_hint_service.dart';
 import 'package:temanku/speech/silero_vad_service.dart';
+import 'package:temanku/story/claude_storyteller_service.dart';
+import 'package:temanku/story/no_storyteller_service.dart';
+import 'package:temanku/story/storyteller_service.dart';
 import 'package:temanku/speech/tts/cached_word_audio_service.dart';
 import 'package:temanku/speech/tts/word_audio_service.dart';
 import 'package:temanku/speech/tts/word_audio_source_impl.dart';
@@ -165,6 +168,28 @@ final soundServiceProvider = Provider<SoundService>((ref) {
 final pronunciationHintServiceProvider =
     Provider.family<PronunciationHintService, bool>((ref, enabled) {
   return enabled ? RemoteArticulationHintService() : const NoHintService();
+});
+
+/// The Claude API key, supplied at build/run time only — never a literal
+/// here. `--dart-define=ANTHROPIC_API_KEY=...` (or
+/// `--dart-define-from-file=secrets.json`, git-ignored) at `flutter run` /
+/// `flutter build`; empty when the build carries none. See
+/// `story/claude_storyteller_service.dart` for why this specific pattern
+/// (compile-time define, not a settings-screen text field) is the right one
+/// for a secret that must never sit in source or in Hive.
+const String _anthropicApiKey = String.fromEnvironment('ANTHROPIC_API_KEY');
+
+/// Same shape as [pronunciationHintServiceProvider] — keyed per child on
+/// `Child.storytellerEnabled`, not a global swap — but with a second gate
+/// `pronunciationHintServiceProvider` doesn't need: consent alone isn't
+/// enough here, because there is no key to call the API with until one is
+/// supplied. `NoStorytellerService` is bound whenever *either* gate is
+/// closed, so a guardian can opt in today and the feature just gets richer,
+/// automatically, the day a build ships with a key — no second toggle.
+final storytellerServiceProvider =
+    Provider.family<StorytellerService, bool>((ref, enabled) {
+  if (!enabled || _anthropicApiKey.isEmpty) return const NoStorytellerService();
+  return ClaudeStorytellerService(apiKey: _anthropicApiKey);
 });
 
 /// Speaks the target word aloud — the model half of speak mode's echoic

@@ -56,4 +56,14 @@ void main() {
     expect(find.byType(Mascot), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  for (final pose in MascotPose.values) {
+    testWidgets('paints the $pose pose without error', (tester) async {
+      await tester.pumpWidget(_wrap(Mascot(pose: pose, animate: false)));
+      await tester.pump();
+
+      expect(find.byType(Mascot), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
 }

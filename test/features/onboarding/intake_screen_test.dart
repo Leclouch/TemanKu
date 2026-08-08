@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:temanku/core/constants/domain_enums.dart';
 import 'package:temanku/core/routing/app_router.dart';
 import 'package:temanku/core/service_locator.dart';
@@ -140,7 +141,7 @@ void main() {
           'atau mengetuk benda itu?'),
       findsOneWidget,
     );
-    final selectedIcon = tester.widgetList<Icon>(find.byIcon(Icons.radio_button_checked));
+    final selectedIcon = tester.widgetList<Icon>(find.byIcon(LucideIcons.circleDot));
     expect(selectedIcon, hasLength(1));
   });
 

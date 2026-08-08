@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import 'package:temanku/core/design/design.dart';
 
@@ -44,7 +45,7 @@ class PhotoImage extends StatelessWidget {
     return Container(
       color: colors.surfaceTinted,
       alignment: Alignment.center,
-      child: Icon(Icons.image_outlined, color: colors.textMuted),
+      child: Icon(LucideIcons.image, color: colors.textMuted),
     );
   }
 }

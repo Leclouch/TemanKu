@@ -28,6 +28,7 @@ class TkScreen extends StatelessWidget {
     this.padding = const EdgeInsets.all(TkSpace.gutter),
     this.floatingActionButton,
     this.bottomBar,
+    this.decor,
   });
 
   final String title;
@@ -47,9 +48,24 @@ class TkScreen extends StatelessWidget {
   /// the "Back / Next" pair on a stepped flow.
   final Widget? bottomBar;
 
+  /// Background texture behind [child] — pass `const TkScreenDecor()` for the
+  /// app's one standard composition (`core/design/components/tk_decor.dart`).
+  /// Null on screens that need the full surface for focused content (a photo
+  /// preview, a stepped question) — the same "no decoration competing with
+  /// the task" instinct `TkChildScreen` enforces unconditionally, applied
+  /// here as an opt-out rather than a rule, since the guardian surface has
+  /// genuine full-attention moments too.
+  final Widget? decor;
+
   @override
   Widget build(BuildContext context) {
     Widget body = child;
+    if (decor != null) {
+      body = Stack(
+        clipBehavior: Clip.none,
+        children: [Positioned.fill(child: decor!), body],
+      );
+    }
     if (scrollable) {
       body = SingleChildScrollView(padding: padding, child: body);
     } else if (padding != EdgeInsets.zero) {

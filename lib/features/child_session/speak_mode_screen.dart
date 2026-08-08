@@ -32,6 +32,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import 'package:temanku/content/keluarga/keluarga_module.dart';
 import 'package:temanku/content/makanan/makanan_module.dart';
@@ -505,7 +506,7 @@ class _ReplayButton extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
-                  speaking ? Icons.volume_up_rounded : Icons.replay_rounded,
+                  speaking ? LucideIcons.volume2 : LucideIcons.rotateCcw,
                   size: 26,
                   color: speaking ? c.primaryAccent : c.text,
                 ),
@@ -608,7 +609,7 @@ class _GuardianJudgeCluster extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               _JudgeButton(
-                icon: Icons.check_circle_outline,
+                icon: LucideIcons.circleCheck,
                 // Success feedback token — never a plain green Icons colour
                 // pulled from Material directly (core/design/ rule).
                 color: colors.successFeedback,
@@ -619,7 +620,7 @@ class _GuardianJudgeCluster extends StatelessWidget {
               ),
               const SizedBox(width: TkSpace.xs),
               _JudgeButton(
-                icon: Icons.replay_circle_filled_outlined,
+                icon: LucideIcons.rotateCcw,
                 // §12: equal visual weight to success — neutralFeedback, never
                 // an alarm/red token.
                 color: colors.neutralFeedback,
@@ -633,7 +634,7 @@ class _GuardianJudgeCluster extends StatelessWidget {
                 _JudgeButton(
                   // Not an outcome the child produced — muted chrome, so it
                   // never reads as a third verdict alongside the two above.
-                  icon: Icons.remove_circle_outline,
+                  icon: LucideIcons.circleMinus,
                   color: colors.textMuted,
                   semanticLabel: 'Tidak mencoba',
                   enabled: enabled,

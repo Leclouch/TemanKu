@@ -15,6 +15,7 @@ library;
 export 'package:temanku/core/design/components/tk_button.dart';
 export 'package:temanku/core/design/components/tk_card.dart';
 export 'package:temanku/core/design/components/tk_choice.dart';
+export 'package:temanku/core/design/components/tk_decor.dart';
 export 'package:temanku/core/design/components/tk_screen.dart';
 export 'package:temanku/core/design/components/tk_status.dart';
 export 'package:temanku/core/design/theme.dart';

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:temanku/core/constants/domain_enums.dart';
 import 'package:temanku/core/service_locator.dart';
 import 'package:temanku/core/design/design.dart';
@@ -70,7 +71,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('pisang'), findsOneWidget);
 
-    await tester.tap(find.byIcon(Icons.more_vert));
+    await tester.tap(find.byIcon(LucideIcons.ellipsisVertical));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Hapus'));
     await tester.pumpAndSettle();
@@ -104,7 +105,7 @@ void main() {
     await tester.pumpWidget(_buildApp(repo));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.more_vert));
+    await tester.tap(find.byIcon(LucideIcons.ellipsisVertical));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Hapus'));
     await tester.pumpAndSettle();
@@ -130,7 +131,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Belum diberi nama'), findsOneWidget);
 
-    await tester.tap(find.byIcon(Icons.more_vert));
+    await tester.tap(find.byIcon(LucideIcons.ellipsisVertical));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Ubah nama'));
     await tester.pumpAndSettle();

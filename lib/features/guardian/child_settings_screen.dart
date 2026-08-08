@@ -28,12 +28,29 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import 'package:temanku/core/service_locator.dart';
 import 'package:temanku/core/design/design.dart';
 import 'package:temanku/data/models/child.dart';
 
 const _consentTitle = 'Aktifkan bantuan mode bicara?';
+
+const _storyConsentTitle = 'Aktifkan cerita maskot?';
+
+/// Names the one exchange this feature adds: the child's name, modul name,
+/// and current tahap — never a photo, never a recording — sent to Claude to
+/// write one flavor sentence. Explicit and separate from the speak-mode
+/// consent above, same "ask before the first on" shape.
+const _storyConsentBody =
+    'Kalau diaktifkan, maskot menulis satu kalimat cerita singkat setiap '
+    'kali anak menyelesaikan sebuah babak — sekadar hiburan, bukan '
+    'penilaian.\n\n'
+    'Untuk menulis kalimat itu, nama anak, nama modul, dan tahap latihan '
+    'saat ini dikirim ke layanan Claude (Anthropic). Tidak ada foto, '
+    'rekaman suara, atau data sesi lain yang dikirim.\n\n'
+    'Ini berbeda dari, dan tidak mengubah, cara aplikasi menyimpan foto dan '
+    'data lain — yang selalu tetap di perangkat.';
 
 /// Explicit, separate from the app's normal on-device-only handling, and
 /// specific to this one feature. Names **both** exchanges — see the library
@@ -122,6 +139,41 @@ class _ChildSettingsScreenState extends ConsumerState<ChildSettingsScreen> {
     });
   }
 
+  Future<void> _setStoryEnabled(bool enabled) async {
+    final child = _child;
+    if (child == null) return;
+
+    if (enabled) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text(_storyConsentTitle),
+          content: const Text(_storyConsentBody),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Batal'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Aktifkan'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+    }
+
+    setState(() => _busy = true);
+    final updated = child.copyWith(storytellerEnabled: enabled);
+    await ref.read(childRepositoryProvider).updateChild(updated);
+    if (!mounted) return;
+    setState(() {
+      _child = updated;
+      _busy = false;
+    });
+  }
+
   // Neither of these needs a `_busy`/confirm gate the way pronunciation-hint
   // consent does (§10 boundary above) — sound is app-level, on-device only,
   // trivially reversible, and turning it off is exactly the "no confirmation
@@ -143,6 +195,7 @@ class _ChildSettingsScreenState extends ConsumerState<ChildSettingsScreen> {
 
     return TkScreen(
       title: 'Pengaturan anak',
+      decor: const TkScreenDecor(),
       child: child == null
           ? const TkLoading(label: 'Memuat pengaturan…')
           : Column(
@@ -175,11 +228,41 @@ class _ChildSettingsScreenState extends ConsumerState<ChildSettingsScreen> {
                         // the guardian has already agreed to must still stay
                         // legible afterwards, not fade into the card.
                         const _NoticePanel(
-                          icon: Icons.cloud_upload_outlined,
+                          icon: LucideIcons.cloudUpload,
                           text: 'Rekaman suara anak dikirim ke server kami, dan '
                               'nama benda dikirim ke layanan suara Microsoft, '
                               'untuk fitur ini. Foto dan data lain tetap hanya '
                               'di perangkat.',
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                TkCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TkSwitchTile(
+                        title: 'Cerita maskot',
+                        value: child.storytellerEnabled,
+                        onChanged: _busy ? null : _setStoryEnabled,
+                      ),
+                      const SizedBox(height: TkSpace.xs),
+                      Text(
+                        'Maskot menulis satu kalimat cerita singkat setiap kali '
+                        'anak menyelesaikan sebuah babak — hiburan, bukan '
+                        'penilaian. Tidak pernah memengaruhi mode, tahap, atau '
+                        'catatan sesi.',
+                        style: context.type.bodySm.copyWith(color: colors.text),
+                      ),
+                      if (child.storytellerEnabled) ...[
+                        const SizedBox(height: TkSpace.sm),
+                        const _NoticePanel(
+                          icon: LucideIcons.sparkles,
+                          text: 'Nama anak, nama modul, dan tahap latihan saat '
+                              'ini dikirim ke layanan Claude (Anthropic) untuk '
+                              'menulis kalimat cerita. Tidak ada foto atau '
+                              'rekaman suara yang dikirim.',
                         ),
                       ],
                     ],
@@ -205,14 +288,14 @@ class _ChildSettingsScreenState extends ConsumerState<ChildSettingsScreen> {
                         const SizedBox(height: TkSpace.xs),
                         Row(
                           children: [
-                            Icon(Icons.volume_down, size: 18, color: colors.textMuted),
+                            Icon(LucideIcons.volume1, size: 18, color: colors.textMuted),
                             Expanded(
                               child: Slider(
                                 value: _soundVolume,
                                 onChanged: _setSoundVolume,
                               ),
                             ),
-                            Icon(Icons.volume_up, size: 18, color: colors.textMuted),
+                            Icon(LucideIcons.volume, size: 18, color: colors.textMuted),
                           ],
                         ),
                       ],

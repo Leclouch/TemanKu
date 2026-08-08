@@ -12,6 +12,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import 'package:temanku/content/keluarga/keluarga_module.dart';
 import 'package:temanku/content/makanan/makanan_module.dart';
@@ -96,10 +97,10 @@ void main() {
                     title: 'Intake',
                     subtitle: 'Satu pertanyaan per mode. Memilih mode yang '
                         'tersedia — bukan memperkirakan level.',
-                    leading: const Icon(Icons.assignment_outlined),
+                    leading: const Icon(LucideIcons.clipboardPen),
                     child: TkButton.secondary(
                       label: 'Isi intake',
-                      icon: Icons.arrow_forward,
+                      icon: LucideIcons.arrowRight,
                       onPressed: () {},
                     ),
                   ),

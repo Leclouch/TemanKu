@@ -163,6 +163,13 @@ void main() {
     await tester.pumpWidget(_buildApp(child.id, repo, sound: sound));
     await tester.pumpAndSettle();
 
+    // The settings screen grew a card (storyteller consent) above this one,
+    // so the slider isn't guaranteed to already be within the default test
+    // viewport — scroll it into view before dragging, same as any other
+    // widget below the fold.
+    await tester.ensureVisible(find.byType(Slider));
+    await tester.pumpAndSettle();
+
     await tester.drag(find.byType(Slider), const Offset(-100, 0));
     await tester.pumpAndSettle();
 
