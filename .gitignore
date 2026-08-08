@@ -4,6 +4,7 @@
 .pub-cache/
 .pub/
 build/
+.worktrees/
 .flutter-plugins
 .flutter-plugins-dependencies
 migrate_working_dir/
