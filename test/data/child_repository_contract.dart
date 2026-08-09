@@ -92,6 +92,27 @@ void runChildRepositoryContractTests(
       expect(reloaded!.pronunciationHintEnabled, isTrue);
     });
 
+    test('activeModeByModule defaults empty and persists a guardian override', () async {
+      // The guardian mode-selection override (features/guardian/level_settings_screen.dart)
+      // — empty (no override) for every child until a guardian explicitly
+      // picks a mode for a module, and that pick must survive exactly like
+      // every other field on Child.
+      final child = await repo.createChild(
+        name: 'Arif',
+        availableModes: {ResponseMode.tap, ResponseMode.match},
+      );
+      expect(child.activeModeByModule, isEmpty);
+
+      await repo.updateChild(
+        child.copyWith(activeModeByModule: {ModuleId.keluarga: ResponseMode.match}),
+      );
+
+      final reloaded = await repo.getChild(child.id);
+      expect(reloaded!.activeModeByModule, {ModuleId.keluarga: ResponseMode.match});
+      // Makanan was never set — absence means "no override", not "tap".
+      expect(reloaded.activeModeByModule.containsKey(ModuleId.makanan), isFalse);
+    });
+
     test('deleteChild removes the profile', () async {
       final child = await repo.createChild(
         name: 'Arif',

@@ -165,6 +165,60 @@ void main() {
     expect(find.text('match-screen:makanan'), findsOneWidget);
   });
 
+  testWidgets(
+      'a guardian override that still names an available mode wins over tap→match→speak priority',
+      (tester) async {
+    final childRepo = InMemoryChildRepository(seed: false);
+    final created = await childRepo.createChild(
+      name: 'Arif',
+      availableModes: {ResponseMode.tap, ResponseMode.match},
+    );
+    // Without this override, priority alone would pick tap — see the
+    // "prefers tap" test above. This is exactly the gap
+    // `Child.activeModeByModule` exists to close.
+    final child = created.copyWith(
+      activeModeByModule: {ModuleId.keluarga: ResponseMode.match},
+    );
+    await childRepo.updateChild(child);
+
+    await tester.pumpWidget(_buildApp(childRepo, child.id));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text(_rumahFraming));
+    await tester.pumpAndSettle();
+
+    expect(find.text('match-screen:keluarga'), findsOneWidget);
+    expect(find.text('tap-screen:keluarga'), findsNothing);
+  });
+
+  testWidgets(
+      'a guardian override naming a mode the child no longer has falls back to priority order, '
+      'unchanged', (tester) async {
+    final childRepo = InMemoryChildRepository(seed: false);
+    final created = await childRepo.createChild(
+      name: 'Arif',
+      // Override was set while match was enabled; intake later dropped it —
+      // a real, reachable sequence, not a contrived one.
+      availableModes: {ResponseMode.tap},
+    );
+    final child = created.copyWith(
+      activeModeByModule: {ModuleId.keluarga: ResponseMode.match},
+    );
+    await childRepo.updateChild(child);
+
+    await tester.pumpWidget(_buildApp(childRepo, child.id));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text(_rumahFraming));
+    await tester.pumpAndSettle();
+
+    // Falls back to _preferredModeFor's priority order exactly as if no
+    // override existed at all — never routes into a mode the child doesn't
+    // have, even if that's what an override says.
+    expect(find.text('tap-screen:keluarga'), findsOneWidget);
+    expect(find.text('match-screen:keluarga'), findsNothing);
+  });
+
   testWidgets('a child with only speak enabled routes into speak mode, never tap or match',
       (tester) async {
     final childRepo = InMemoryChildRepository(seed: false);

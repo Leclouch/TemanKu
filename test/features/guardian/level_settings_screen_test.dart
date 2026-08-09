@@ -61,6 +61,64 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Tahap 1'), findsOneWidget);
+    // Only one mode available for this child — nothing to choose between, so
+    // no mode selector at all (see _ModuleLevelDropdown's own doc comment).
+    expect(find.text('Mode aktif untuk modul ini:'), findsNothing);
+  });
+
+  testWidgets(
+      'a child with more than one available mode shows a mode selector, and picking one '
+      'persists immediately with no Terapkan tap needed', (tester) async {
+    final repository = InMemoryChildRepository(seed: false);
+    final child = await repository.createChild(
+      name: 'Arif',
+      availableModes: {ResponseMode.tap, ResponseMode.match},
+    );
+    final persistence = LadderPersistence(repository);
+    final tracker = AdvancementTracker(
+      dialEngine: const TwoDialEngine(),
+      persistence: persistence,
+    );
+
+    await tester.pumpWidget(
+      _buildApp(
+        childId: child.id,
+        repository: repository,
+        persistence: persistence,
+        tracker: tracker,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Visible without expanding the ExpansionTile at all — the mode
+    // selector sits above it in the same card, by design (the guardian
+    // shouldn't need to open the level detail just to switch modes). Both
+    // Makanan and Keluarga show their own selector, since `availableModes`
+    // is child-wide rather than per-module, so scope every finder to the
+    // Keluarga card specifically to avoid ambiguity with Makanan's copy.
+    final keluargaCard = find.ancestor(
+      of: find.text('Keluarga'),
+      matching: find.byType(TkCard),
+    );
+    // No override yet — priority order means tap ("Ketuk") is the resolved
+    // active mode, same as `day_arc_screen.dart` would route into.
+    expect(
+      find.descendant(of: keluargaCard, matching: find.text('Mode aktif untuk modul ini:')),
+      findsOneWidget,
+    );
+    expect(find.descendant(of: keluargaCard, matching: find.text('Ketuk')), findsOneWidget);
+    expect(find.descendant(of: keluargaCard, matching: find.text('Seret')), findsOneWidget);
+
+    final seretTile = find.descendant(of: keluargaCard, matching: find.text('Seret'));
+    await tester.ensureVisible(seretTile);
+    await tester.tap(seretTile);
+    await tester.pumpAndSettle();
+
+    final reloaded = await repository.getChild(child.id);
+    expect(reloaded!.activeModeByModule, {ModuleId.keluarga: ResponseMode.match});
+    // Makanan was never touched — its own selector, if opened, would still
+    // resolve to the priority-order fallback rather than inheriting this pick.
+    expect(reloaded.activeModeByModule.containsKey(ModuleId.makanan), isFalse);
   });
 
   testWidgets(

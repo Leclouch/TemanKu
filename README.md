@@ -1,207 +1,158 @@
 # TemanKu
 
-Guardian-mediated AI micro-game teaching Indonesian neurodivergent K-12 students
-real-world functional classification skills, using photos of the child's own
-environment, in 3–5 minute sessions.
-
-This repo is currently a **scaffold**: structure and wiring only, no feature logic.
-It exists so IT-1 and IT-2 can build in parallel from day one without blocking on
-each other. See `docs/` for the governing documents — the source of truth is the
-authority on product decisions, the architecture doc (ADR-1…4) on structural ones.
+**A guardian-mediated AI micro-game teaching Indonesian neurodivergent K-12
+students real-world functional classification skills — using photos of the
+child's own environment, in 3–5 minute sessions.**
 
 ---
 
-## First run
+## The problem
+
+Most "serious games" built for neurodivergent learners (especially for ASD)
+use English, Western stock imagery, and unfamiliar contexts — dollars,
+foreign supermarkets, objects a child has never held. A World Bank paper (Hata, Wang, Yuwono & Nomura, 2023) surveying 2,000+
+Indonesian special-education teachers found assistive-tech availability is
+still low across the system, and the tools that do exist rarely reflect a
+child's actual world.
+
+We spent time observing at a neurodiversity clinic (Beyond Brighter Minds
+Indonesia) and a special school (SLB Taruna Al-Quran), watching therapists
+run physical drills — circling numbers, color matching, picture pointing,
+family recognition — with children who have ADHD, ASD, or both. TemanKu asks
+what happens if the digital version of those drills uses the child's *own*
+snacks and the child's *own* family, instead of stock photography.
+
+## What it does
+
+**Two MVP modules**, each teaching a real-world classification skill:
+
+| Module | Skill |
+|---|---|
+| **Makanan** (Food) | Edible vs. non-edible, using photos of the child's own snacks |
+| **Keluarga** (Family) | "My family" vs. "not my family," using real family photos against a bundled, consent-safe library of distractor faces |
+
+**Three response modes**, mirroring therapist practice, each with its own
+independent progression per module (no cross-module gating):
+
+| Mode | Maps to |
+|---|---|
+| **Tap** | Listener responding |
+| **Match / Drag** | Visual perception, matching-to-sample |
+| **Speak** | Tact (echoic) — child repeats a word, an adult judges |
+
+**The guardian stays in the loop, always.** A guardian uploads the child's
+photos and mediates every session. The app assists — checking photo quality,
+suggesting a label, flagging when a child may be disengaging from a tap/match
+trial — but never scores or advances a child on its own. Every ✅/↻ is a
+guardian's tap, not a model's output. Guardians can also manually set a
+child's starting difficulty per module/mode (e.g. from a therapist's
+assessment) — nobody is placed by a quiz. Everyone starts at Step 1 by
+default, because in real assessment, a wrong high placement is far more
+damaging than a low one.
+
+## How it's built
+
+**Stack:** Flutter/Dart (single Android/iOS codebase), `flutter_riverpod`
+for state, `go_router` for navigation, a custom token-based design system
+(`lib/core/design/`) so no screen improvises its own visual language.
+
+**Offline-first core loop.** Photo capture, classification, gameplay, and
+tap/match disengagement detection all run entirely on-device, with zero
+network calls — schools can't be assumed to have reliable internet. Data is
+stored locally in encrypted Hive storage and optionally synced to
+Firebase/Firestore.
+
+**One deliberate network exception: Speak mode.** It's opt-in per child and
+gated behind explicit guardian consent. When enabled: the target word is
+synthesized via Microsoft Edge TTS directly from the device (text out, audio
+back — no microphone data leaves the phone for that step), and the child's
+echoed clip can optionally be scored by our own FastAPI + wav2vec2 backend
+for a phonetic *hint*. That hint only ever highlights a suggested button; the
+guardian's tap is still the only thing that reaches the advancement logic.
+
+**A composition root for every hard call.** `lib/core/service_locator.dart`
+is the one file where every swappable implementation is chosen — repository
+backends and the two "risky" on-device services (photo classifier, VAD). The
+image classifier has moved between a bundled TFLite model, Google ML Kit,
+and a self-hosted zero-shot SigLIP2 model as tradeoffs became clearer; VAD
+(Silero, via ONNX Runtime) currently runs on-device for Speak mode's
+turn-taking. Tap/match disengagement detection is a separate, simpler
+system — rule-based on response latency and pattern repetition, not audio —
+and only ever *flags*, never pauses or ends a session.
+
+**Consent-safe by construction.** The Keluarga module never uses real
+strangers' photos. Distractor faces are a small bundled library, curated for
+diversity so a child can't shortcut-learn "family = people who look like
+this."
+
+**Built for two people to work in parallel.** With a tight build clock and a
+two-person IT team, repositories are defined as abstract interfaces backed
+by an executable contract test (`test/data/child_repository_contract.dart`)
+— one person could build the game engine against in-memory fakes while the
+other built the real Firestore/Hive implementations, both required to pass
+the same contract.
+
+## Getting started
 
 ```bash
 flutter pub get
-flutter test         # → 263 passing
-flutter analyze      # → clean
-flutter run          # → select-child screen
+flutter test         # engine + repository-contract suite
+flutter analyze
+flutter run           # → select-child screen
 ```
 
 Verified on **Flutter 3.44.8 stable / Dart 3.12.2**. `android/`, `ios/`, and
 `web/` are generated and committed.
 
-**Android needs two one-time setup steps** on a fresh machine — the SDK is
-detected but incomplete:
+Firebase is **not** initialized by default — `lib/firebase_options.dart` is
+generated per-developer via `flutterfire configure` and gitignored, so the
+app runs entirely on in-memory/local repositories out of the box. `flutter
+run -d chrome` works for engine/repository work, but the app is phone-first
+by design — validate any session-UI change on a real device.
+
+To exercise Speak mode's optional backend end-to-end:
 
 ```bash
-# install "Android SDK Command-line Tools" via Android Studio → SDK Manager
-flutter doctor --android-licenses
+dart run tool/smoke_articulation_backend.dart   # 6 checks against a live host
 ```
 
-Until then, `flutter run -d chrome` works and is enough for engine and
-repository work. Do not merge child-session UI on the strength of a web run
-alone — §11 is phone-first, and touch targets and layout need a real device.
+## Project layout
 
-Firebase is **not** initialised yet, on purpose — `lib/firebase_options.dart` is
-generated per-developer by `flutterfire configure` and is gitignored, so
-initialising it here would make the scaffold fail to run for anyone who hasn't
-provisioned a project. The app runs entirely on in-memory repositories today.
-See the commented block in `lib/main.dart`.
-
----
-
-## The three things to understand before you touch anything
-
-**1. `lib/core/service_locator.dart` is the only place implementations are chosen.**
-Repositories (ADR-3) and the two risky services (ADR-4) are all bound there. Both
-risky services default to their **fallback**, so the scaffold runs with zero native
-dependencies and each primary arrives as a one-line promotion:
-
-| Provider | Now | Swap to | When |
-|---|---|---|---|
-| `childRepositoryProvider` | `InMemoryChildRepository` | `FirestoreChildRepository` | IT-2, Day 1–2 |
-| `classifierServiceProvider` | `MlKitClassifier` (promoted) | `TfliteClassifier`, then `ManualLabelClassifier` | revert if ML Kit stops being reliable — no debate |
-| `vadServiceProvider` | `ThreeButtonFallback` | `SileroVadService` | IT-1, Day 4 · tripwire Day 4 midday |
-
-If you catch yourself writing `if (useFallback)` in a widget, come back here instead.
-
-**2. `lib/data/repositories/` is a shared contract.** Three abstract classes, three
-in-memory fakes with seeded sample data (one child, Makanan + Keluarga). IT-1 builds
-the engine against the fakes today; IT-2 builds Firestore/Hive in parallel. Changing
-a signature there is a shared-folder change — raise it at the evening checkpoint.
-
-`test/data/child_repository_contract.dart` is the executable definition of that
-contract. Every implementation must pass it unmodified. Don't weaken an assertion
-to make a new implementation pass — each case encodes a source-of-truth rule.
-
-**3. `lib/core/design/` is the design system, and nothing outside it invents a
-visual value.** Three layers, in reading order:
-
-- `tokens.dart` — the brand palette, semantic colour slots, type scale, spacing,
-  radii, stroke widths, motion. **The only file in the repo allowed a colour
-  literal.** Slots are named by role (`successFeedback`), never by hue.
-- `theme.dart` — binds those tokens onto Material's component themes, so a bare
-  `AppBar`, `FilledButton` or `AlertDialog` comes out on-brand without the call
-  site knowing anything. This is why the app needs no third-party UI library.
-- `components/` — the `Tk*` vocabulary: `TkScreen` / `TkChildScreen` shells,
-  `TkCard`, `TkSection`, `TkButton`, `TkChoiceTile`, `TkSwitchTile`,
-  `TkStepIndicator`, `TkLoading`, `TkEmptyState`, `TkBadge`, `TkDetailRow`.
-
-Import `core/design/design.dart` — one barrel for all three. Reach for a `Tk*`
-component first; a plain Material widget is fine as a fallback, because it is
-themed. What is never fine is a local `Container(decoration: BoxDecoration(...))`
-that reinvents card chrome — that is how the last round of drift started.
-
-`test/core/design/design_system_test.dart` guards the invariants: no type role
-clips at 360×640, every interactive component clears the 44pt floor, derived ink
-stays ≥4.5:1 across the palette, and no theme exposes a red error slot.
-
-Two substitutions to know about. **Robuck Rounded** and **ABC Diatype Rounded
-Plus** are commercial licences we do not hold; Nunito and Figtree stand in, and
-each family name lives in a single `const` in `tokens.dart` so adopting the real
-faces is a one-line change per family. Display leading is 0.95/1.00 rather than
-the specimen's literal 0.80 — Nunito's extenders clip below ~0.90, which the
-clipping guard catches.
-
----
-
-## Speak mode and the external backend
-
-Speak mode is an **echoic** exercise: the app speaks the word, the child
-repeats it, an adult judges. Two of those three steps leave the device, to
-**two different destinations**, both gated entirely behind
-`Child.pronunciationHintEnabled`:
-
-| Direction | Destination | What crosses the wire |
-|---|---|---|
-| Model the word | Microsoft Edge TTS, direct from the device (`lib/speech/tts/edge_tts_source.dart`, `package:flutter_edge_tts`) | the word as text → MP3 back. **No microphone data.** |
-| Score the echo | our FastAPI service (`main.py`, wav2vec2), declared in `lib/speech/articulation_backend.dart` — the app's **only backend** | a clip of **the child's voice** → `{predicted_ipa, distance}` |
-
-TTS used to be a second endpoint on the same FastAPI service (`GET /tts`, a
-proxy in front of the same Microsoft service). It now calls Microsoft
-directly, which removes a network hop and takes TTS out of resource
-contention with the wav2vec2 model on the backend host — but it also means
-"the only outbound network destination" is no longer accurate to say about
-`articulation_backend.dart` alone. See that file's and
-`features/guardian/child_settings_screen.dart`'s doc comments for how the
-consent copy handles two hosts under one toggle.
-
-Four things to know before touching any of it:
-
-**1. The guardian still judges.** §6 is unchanged. The score *highlights* one
-of the ✅/↻/— buttons and prints the phonemes it heard; the guardian's tap is
-the only thing that reaches `AdvancementTracker`. There is no code path from
-`PronunciationHintResult` to `recordResponse`, and `speak_mode_screen.dart`'s
-`_judge` takes its outcome as a parameter specifically so there cannot be.
-
-**2. Playback must finish before the mic opens.** If they overlap, VAD hears
-the app's own synthesised voice and scores the app against itself.
-`WordAudioService.speak` completes on playback end, and `_runTrialTurn` awaits
-it before listening. This is a correctness property, not presentation.
-
-**3. Tolerance is calibrated client-side**, in
-`speech/articulation_tolerance.dart`. The backend returns a **raw** Levenshtein
-distance; that file maps `LadderPosition` → how much is tolerated, sends it as
-the request's `difficulty` so both sides agree, and re-derives the judgement
-locally so the UI can explain it. The bar **loosens** at a fresh similarity
-tier — §4.5's one-dial-at-a-time rule says a child stepping up in visual
-discrimination should not be charged again on articulation at the same moment.
-
-**4. `TARGET_DICT` in `main.py` has three words.** Guardian labels are free
-text, so most words cannot be scored. `PronunciationHintService.canScore`
-probes `GET /` and, when the word is absent, **no clip is recorded at all** —
-not captured, not uploaded (§10). TTS has no such limit, so the echoic
-exercise still works; only the advisory hint drops out.
-> `main.py` already sets the eSpeak env vars for `phonemizer` but never
-> imports it. `phonemizer.phonemize(word, language='id')` would generate the
-> target IPA for any Indonesian word and remove this limit entirely.
-
-The ngrok URL is a **development address that changes when the tunnel
-restarts** — one line in `articulation_backend.dart`. Verify a live backend
-end-to-end with:
-
-```bash
-dart run tool/smoke_articulation_backend.dart   # 6 checks, real host
+```
+lib/
+  core/          design system, service locator, shared constants
+  content/       module definitions (Makanan, Keluarga)
+  data/          repositories (Firestore/Hive/in-memory) + models
+  engine/        pure-Dart game logic — ladder, advancement, rotation
+  features/      screens — child_session/, guardian/
+  photo_pipeline/  classifiers, quality gate, stranger library
+  speech/        VAD, TTS, articulation hint service
 ```
 
----
+## Testing
 
-## Ownership (ADR-2)
+Coverage is weighted deliberately: the engine (pure Dart, most likely to
+hide a subtle bug) gets full unit tests, repositories get contract tests
+that every implementation must pass unmodified, and widget tests are the
+first thing cut under time pressure.
 
-| | Owns | Shared — agree before editing |
-|---|---|---|
-| **IT-1** | `engine/`, `speech/`, `features/child_session/` | `core/design/`, `data/repositories/` |
-| **IT-2** | `data/`, `photo_pipeline/`, `features/guardian/` | `core/design/`, `data/repositories/` |
+## What's next
 
-`content/` and `widgets/` are jointly touched.
+- **Deferred modules already scaffolded in the UI** (shown but disabled):
+  Sampah (organic/non-organic waste), Uang (Rupiah counting), plus two
+  earlier-stage concepts, Pengenalan Keamanan and Pengenalan Orang
+  Terpercaya.
+- **A richer Keluarga hierarchy** — extended family relationships beyond the
+  current immediate-family scope.
+- **Co-design validation** with BBMI and SLB Taruna Al-Quran — recorded
+  sessions and performance data feeding the next development loop.
+- **A classroom surface** — teacher-led, multi-child, synchronous use
+  (exploratory, not yet started).
 
----
+## Team & credits
 
-## Package choices
+Built by a four-person team split across Information Technology and
+Psychology — the psychology half grounding decisions in field observation
+and theory (Stanford Neurodiversity Project's strengths-based model), the IT
+half turning that into working software.
 
-Pinned by the source of truth: `flutter_riverpod` (ADR-1), `firebase_core` /
-`firebase_auth` / `cloud_firestore` (§11). Chosen here:
-
-- **`hive` + `hive_flutter`** for local persistence. Everything the MVP stores
-  locally is key-value shaped — ladder positions keyed `childId::module::mode`,
-  photo metadata by id, trial logs appended per session — and Hive needs no schema
-  migration step, which matters on a 5-day clock. It also ships `HiveAesCipher`,
-  which §11's "local **encrypted** storage" requires and sqflite does not provide
-  out of the box.
-  **Flagged for IT-2:** if the disengagement detector's latency baseline ends up
-  wanting real queries over trial logs (percentiles across sessions, filtered by
-  module), sqflite would serve that better than iterating boxes. Adding sqflite
-  *alongside* Hive for trial logs only is a reasonable Day 2 call — the
-  `SessionRepository` interface already separates trial logs from summaries, so
-  that swap does not touch the engine.
-
-- **`go_router`** for navigation, over hand-rolled Navigator 2.0. The flows are
-  shallow and named; a declarative route table is one file both developers can read
-  without owning each other's screens. Routes carry `childId` in the path rather
-  than in ambient state, so a screen can't render the wrong child (§9).
-
-- **No font package.** Fonts are bundled as static OFL assets under `assets/fonts/`
-  rather than fetched by `google_fonts` — §11 is offline-first, and type must not
-  depend on a network call. See `core/design/tokens.dart`.
-
----
-
-## Testing priority
-
-Per the architecture doc, this is a deliberate call, not an oversight:
-`engine/` gets real unit tests (pure Dart, fast, most likely to hide a subtle bug);
-`data/repositories/` gets contract tests; UI/widget tests are the first thing to cut
-if Day 5 is tight.

@@ -21,6 +21,7 @@ class Child {
     this.pronunciationHintEnabled = false,
     this.storytellerEnabled = false,
     this.levelIndicatorEnabled = false,
+    this.activeModeByModule = const {},
   });
 
   final String id;
@@ -79,6 +80,27 @@ class Child {
   /// plain switch.
   final bool levelIndicatorEnabled;
 
+  /// Guardian-set override of which [ResponseMode] is "active" for a module —
+  /// the mode `features/child_session/day_arc_screen.dart` actually routes
+  /// into when its module card is tapped. Default **empty**: absence of a
+  /// module's key means "no override", which [activeModeFor] treats
+  /// identically to an override that names a mode no longer in
+  /// [availableModes] — both fall back to [preferredModeFor]'s tap→match→speak
+  /// priority.
+  ///
+  /// Exists because that priority order means match/speak are otherwise
+  /// unreachable from the real product entry points whenever tap is also
+  /// enabled (which is nearly always) — even though both are fully built and
+  /// functional. Deliberately guardian-set, not child-facing and not
+  /// automatic: mode choice stays "never re-litigated as a child-facing
+  /// decision" (`day_arc_screen.dart`'s own doc comment), this just gives a
+  /// guardian a way to point that fixed choice at match or speak instead of
+  /// always tap. Set via `features/guardian/level_settings_screen.dart`,
+  /// alongside that same screen's ladder-position override — both are
+  /// "guardian controls what a child's session looks like" for the same
+  /// (module, mode) axis.
+  final Map<ModuleId, ResponseMode> activeModeByModule;
+
   Child copyWith({
     String? name,
     Set<ResponseMode>? availableModes,
@@ -86,6 +108,7 @@ class Child {
     bool? pronunciationHintEnabled,
     bool? storytellerEnabled,
     bool? levelIndicatorEnabled,
+    Map<ModuleId, ResponseMode>? activeModeByModule,
   }) =>
       Child(
         id: id,
@@ -95,6 +118,7 @@ class Child {
         pronunciationHintEnabled: pronunciationHintEnabled ?? this.pronunciationHintEnabled,
         storytellerEnabled: storytellerEnabled ?? this.storytellerEnabled,
         levelIndicatorEnabled: levelIndicatorEnabled ?? this.levelIndicatorEnabled,
+        activeModeByModule: activeModeByModule ?? this.activeModeByModule,
       );
 }
 
@@ -135,4 +159,38 @@ class LadderPosition {
 
   @override
   String toString() => 'LadderPosition(array: $arraySize, sim: ${similarityTier.name})';
+}
+
+/// Priority when a child has more than one mode enabled and no guardian
+/// override applies — never a choice the child makes. Tap first (simplest
+/// motor channel), then match, then speak. Single source of truth for both
+/// [preferredModeFor] and [activeModeFor]; also `day_arc_screen.dart`'s own
+/// mode-priority doc comment describes the reasoning for this order.
+const modePriority = [ResponseMode.tap, ResponseMode.match, ResponseMode.speak];
+
+/// Null only when [availableModes] is entirely empty (a real, reachable
+/// state per `test/features/onboarding/intake_screen_test.dart`), in which
+/// case there is nothing valid to route into at all.
+ResponseMode? preferredModeFor(Set<ResponseMode> availableModes) {
+  for (final mode in modePriority) {
+    if (availableModes.contains(mode)) return mode;
+  }
+  return null;
+}
+
+/// Which mode is active for [child]'s [module] — [Child.activeModeByModule]'s
+/// override if one is set and still names a mode the child actually has,
+/// [preferredModeFor]'s priority order otherwise (a stale override, e.g. one
+/// intake later removed, is treated exactly like no override rather than
+/// routing into a mode the child no longer has enabled).
+///
+/// Shared by `features/child_session/day_arc_screen.dart` (decides which
+/// mode a module card actually routes into) and
+/// `features/guardian/level_settings_screen.dart` (shows/sets that same
+/// choice) — kept here, next to [Child.activeModeByModule] itself, so the
+/// two screens can never drift apart on what "active mode" means.
+ResponseMode? activeModeFor(Child child, ModuleId module) {
+  final override = child.activeModeByModule[module];
+  if (override != null && child.availableModes.contains(override)) return override;
+  return preferredModeFor(child.availableModes);
 }

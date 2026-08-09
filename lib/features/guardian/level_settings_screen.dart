@@ -1,9 +1,21 @@
-/// Guardian controls for selecting an engine-reachable starting point.
+/// Guardian controls for selecting an engine-reachable starting point, and
+/// for choosing which response mode is active per module.
 ///
-/// The screen deliberately derives every option from [DialEngine] rather than
-/// owning a second, hand-maintained level table. A manual override writes the
-/// selected position first, then clears only the matching advancement streak
-/// so progress from the old position cannot advance the new one.
+/// The screen deliberately derives every level option from [DialEngine]
+/// rather than owning a second, hand-maintained level table. A manual level
+/// override writes the selected position first, then clears only the
+/// matching advancement streak so progress from the old position cannot
+/// advance the new one.
+///
+/// Mode selection (`Child.activeModeByModule`) lives on this same screen
+/// rather than a separate one — both controls are "guardian decides what a
+/// child's session looks like" for the same (module, mode) axis, and mode
+/// selection is what makes the level picker below meaningful for match/speak
+/// at all: `features/child_session/day_arc_screen.dart`'s module cards
+/// otherwise always default to tap (see `activeModeFor` in
+/// `data/models/child.dart` for why and how). Unlike the level override,
+/// picking a mode applies immediately — there's no streak to invalidate and
+/// nothing leaves the device, so it doesn't need the "Terapkan" gate.
 library;
 
 import 'package:flutter/material.dart';
@@ -76,6 +88,19 @@ class _LevelSettingsScreenState extends ConsumerState<LevelSettingsScreen> {
     });
   }
 
+  /// Applies immediately, unlike [_apply] — see the library doc comment for
+  /// why this control doesn't need the same "Terapkan" friction.
+  Future<void> _selectActiveMode(ModuleId module, ResponseMode mode) async {
+    final child = _child;
+    if (child == null) return;
+    final updated = child.copyWith(
+      activeModeByModule: {...child.activeModeByModule, module: mode},
+    );
+    await ref.read(childRepositoryProvider).updateChild(updated);
+    if (!mounted) return;
+    setState(() => _child = updated);
+  }
+
   void _selectStep(int blockIndex, int selectedIndex) {
     setState(() {
       _blocks = [
@@ -143,6 +168,8 @@ class _LevelSettingsScreenState extends ConsumerState<LevelSettingsScreen> {
                         if (_blocks[index].module == module)
                           (index: index, block: _blocks[index]),
                     ],
+                    activeMode: activeModeFor(child, module),
+                    onModeSelected: (mode) => _selectActiveMode(module, mode),
                     onSelected: _selectStep,
                     onApply: _apply,
                   ),
@@ -200,44 +227,91 @@ class _ModuleLevelDropdown extends StatelessWidget {
   const _ModuleLevelDropdown({
     required this.module,
     required this.blocks,
+    required this.activeMode,
+    required this.onModeSelected,
     required this.onSelected,
     required this.onApply,
   });
 
   final ModuleId module;
   final List<({int index, _LevelBlock block})> blocks;
+
+  /// [activeModeFor]'s current resolution for this module — the guardian's
+  /// override if one is set and still valid, the tap→match→speak priority
+  /// fallback otherwise. Only null when [Child.availableModes] is entirely
+  /// empty, which also means [blocks] is empty and `build` returns before
+  /// this is ever read — nullable purely so the caller (which computes this
+  /// once per module, before knowing whether that module's [blocks] will be
+  /// empty) doesn't need its own separate empty-check first.
+  final ResponseMode? activeMode;
+  final ValueChanged<ResponseMode> onModeSelected;
+
   final void Function(int blockIndex, int selectedIndex) onSelected;
   final ValueChanged<int> onApply;
 
   @override
   Widget build(BuildContext context) {
-    if (blocks.isEmpty) return const SizedBox.shrink();
+    final resolvedActiveMode = activeMode;
+    if (blocks.isEmpty || resolvedActiveMode == null) return const SizedBox.shrink();
     final definition = _definitionFor(module);
+    final availableModes = [for (final entry in blocks) entry.block.mode];
+
     return Padding(
       padding: const EdgeInsets.only(bottom: TkSpace.sm),
       child: TkCard(
-        child: Material(
-          color: Colors.transparent,
-          child: ExpansionTile(
-            title: Text(definition.displayName),
-            subtitle: const Text('Buka untuk memilih tahap.'),
-            children: [
-              for (final entry in blocks)
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Only shown when there's an actual choice to make — a single
+            // available mode has nothing to pick between, so a selector
+            // would just be a one-option control with no real function
+            // (matches the existing "match/speak both work fine, tap is
+            // just what always won by default" gap this screen exists to
+            // close — see the library doc comment).
+            if (availableModes.length > 1) ...[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(TkSpace.md, TkSpace.sm, TkSpace.md, TkSpace.xxs),
+                child: Text(
+                  'Mode aktif untuk modul ini:',
+                  style: context.type.bodySm.copyWith(color: context.colors.textMuted),
+                ),
+              ),
+              for (final mode in availableModes)
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    TkSpace.sm,
-                    0,
-                    TkSpace.sm,
-                    TkSpace.sm,
-                  ),
-                  child: _LevelBlockCard(
-                    block: entry.block,
-                    onSelected: (step) => onSelected(entry.index, step),
-                    onApply: () => onApply(entry.index),
+                  padding: const EdgeInsets.symmetric(horizontal: TkSpace.sm),
+                  child: TkChoiceTile<ResponseMode>(
+                    label: _modeLabel(mode),
+                    value: mode,
+                    groupValue: resolvedActiveMode,
+                    onSelected: onModeSelected,
                   ),
                 ),
+              const SizedBox(height: TkSpace.xs),
             ],
-          ),
+            Material(
+              color: Colors.transparent,
+              child: ExpansionTile(
+                title: Text(definition.displayName),
+                subtitle: const Text('Buka untuk memilih tahap.'),
+                children: [
+                  for (final entry in blocks)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        TkSpace.sm,
+                        0,
+                        TkSpace.sm,
+                        TkSpace.sm,
+                      ),
+                      child: _LevelBlockCard(
+                        block: entry.block,
+                        onSelected: (step) => onSelected(entry.index, step),
+                        onApply: () => onApply(entry.index),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

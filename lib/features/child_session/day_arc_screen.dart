@@ -11,7 +11,7 @@
 /// starts a session for that module in whichever [ResponseMode] the child
 /// actually has: §8/§9 are explicit that intake selects *modes*, and mode
 /// choice is never re-litigated as a child-facing decision downstream —
-/// [_preferredModeFor] picks one deterministically (tap → match → speak
+/// [preferredModeFor] picks one deterministically (tap → match → speak
 /// priority) rather than asking. A child excluded from a mode by intake can
 /// never be routed into it; the module cards below only ever build a route
 /// out of [Child.availableModes].
@@ -40,21 +40,6 @@ import 'package:temanku/core/service_locator.dart';
 import 'package:temanku/data/models/child.dart';
 import 'package:temanku/story/storyteller_service.dart';
 import 'package:temanku/widgets/mascot.dart';
-
-/// Priority when a child has more than one mode enabled — never a choice the
-/// child makes. Tap first (simplest motor channel), then match, then speak;
-/// see the doc comment above for why this exists at all instead of asking.
-const _modePriority = [ResponseMode.tap, ResponseMode.match, ResponseMode.speak];
-
-/// Null only when intake left every mode unchecked (`availableModes` empty —
-/// a real, reachable state per `test/features/onboarding/intake_screen_test.dart`),
-/// in which case there is nothing valid to route into at all.
-ResponseMode? _preferredModeFor(Set<ResponseMode> availableModes) {
-  for (final mode in _modePriority) {
-    if (availableModes.contains(mode)) return mode;
-  }
-  return null;
-}
 
 class _DayArcModule {
   const _DayArcModule({required this.definition, required this.framingText, required this.icon});
@@ -155,9 +140,11 @@ class _DayArcScreenState extends ConsumerState<DayArcScreen> {
 
   /// Always keyed to Makanan/kantin — the module `_dayArcModules` always
   /// leads with (§ that list's own doc comment on the fixed order) — and to
-  /// whichever mode `_preferredModeFor` would actually route into. Not a
-  /// per-module story yet; one flavor line per visit is enough for a first
-  /// pass, and this picks the same module the child sees first regardless.
+  /// whichever mode `activeModeFor` would actually route into (the
+  /// guardian's override if one is set and still valid, `preferredModeFor`'s
+  /// priority order otherwise). Not a per-module story yet; one flavor line
+  /// per visit is enough for a first pass, and this picks the same module the
+  /// child sees first regardless.
   Future<void> _loadStoryBeat(Child child) async {
     // Checked here, not just inside which [StorytellerService] gets bound —
     // `NoStorytellerService` itself always returns a beat (that's the whole
@@ -173,7 +160,7 @@ class _DayArcScreenState extends ConsumerState<DayArcScreen> {
       return;
     }
 
-    final mode = _preferredModeFor(child.availableModes);
+    final mode = activeModeFor(child, makananModule.id);
     if (mode == null) {
       developer.log('story beat skipped: no available mode', name: 'DayArcScreen');
       return;
@@ -227,8 +214,6 @@ class _DayArcScreenState extends ConsumerState<DayArcScreen> {
       // setup gap.
       return const TkChildNotice(message: 'Profil anak tidak ditemukan.');
     }
-
-    final preferredMode = _preferredModeFor(child.availableModes);
 
     return Stack(
       clipBehavior: Clip.none,
@@ -380,18 +365,35 @@ class _DayArcScreenState extends ConsumerState<DayArcScreen> {
               child: SingleChildScrollView(
                 child: Column(
                   children: [
+                    // Computed per module, not once for the whole screen —
+                    // a guardian override (`Child.activeModeByModule`) is
+                    // per-module, so kantin and rumah can now resolve to
+                    // different modes. See `activeModeFor`'s own doc
+                    // comment. `activeModeFor` is a cheap pair of map/set
+                    // lookups, so calling it twice below (the null check,
+                    // then the route) is simpler than threading a local
+                    // through an extra widget just for variable scope.
                     for (final module in _dayArcModules) ...[
                       _ModuleCard(
                         module: module,
-                        onTap: preferredMode == null
+                        onTap: activeModeFor(child, module.definition.id) == null
                             ? null
                             : () => context.push(
-                                  _routeFor(widget.childId, module.definition.id, preferredMode),
+                                  _routeFor(
+                                    widget.childId,
+                                    module.definition.id,
+                                    activeModeFor(child, module.definition.id)!,
+                                  ),
                                 ),
                       ),
                       const SizedBox(height: TkSpace.sm),
                     ],
-                    if (preferredMode == null)
+                    // Unchanged in meaning from before this was computed
+                    // per-module: this was only ever true when
+                    // `availableModes` was entirely empty in the first
+                    // place, since any non-empty set gives every module's
+                    // `activeModeFor` something to fall back to.
+                    if (child.availableModes.isEmpty)
                       Padding(
                         padding: const EdgeInsets.only(top: TkSpace.xs),
                         child: Text(
@@ -461,7 +463,7 @@ class _DayArcScreenState extends ConsumerState<DayArcScreen> {
   }
 }
 
-/// One module doorway. [onTap] is null exactly when [_preferredModeFor] found
+/// One module doorway. [onTap] is null exactly when [preferredModeFor] found
 /// no enabled mode at all — the card renders dimmed and inert rather than
 /// disappearing, so "nothing is active yet" reads as a calm, visible state
 /// rather than an unexplained missing card.
